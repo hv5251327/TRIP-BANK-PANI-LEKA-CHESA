@@ -107,18 +107,25 @@ async function saveToSupabase(data) {
 
     // 1. Sync people
     if (people.length > 0) {
-      await supabaseFetch('people', {
+      // on_conflict=name is required for upsert on a non-PK unique column
+      const upsertRes = await supabaseFetch('people?on_conflict=name', {
         method: 'POST',
-        headers: { 'Prefer': 'resolution=merge-duplicates' },
+        headers: { 'Prefer': 'resolution=ignore-duplicates,return=minimal' },
         body: JSON.stringify(people.map(name => ({ name })))
       });
-      const pNames = people.map(p => `"${encodeURIComponent(p)}"`).join(',');
-      await supabaseFetch(`people?name=not.in.(${pNames})`, { method: 'DELETE' });
+      if (!upsertRes.ok) {
+        const errText = await upsertRes.text();
+        console.error('people upsert error:', errText);
+      }
+      // Delete members who have been removed — PostgREST not.in.() uses plain comma-separated values, no quotes/encoding
+      const namesCsv = people.map(p => p.replace(/,/g, ' ')).join(',');
+      await supabaseFetch(`people?name=not.in.(${namesCsv})`, { method: 'DELETE' });
     } else {
-      await supabaseFetch('people?id=gt.0', { method: 'DELETE' });
+      // Delete all people
+      await supabaseFetch('people?id=gte.0', { method: 'DELETE' });
     }
 
-    // 2. Sync expenses
+    // 2. Sync expenses — upsert by primary key id
     if (expenses.length > 0) {
       const expRows = expenses.map(e => ({
         id: e.id,
@@ -132,19 +139,26 @@ async function saveToSupabase(data) {
         is_self_spend: !!e.isSelfSpend,
         created_at: Number(e.createdAt) || Date.now()
       }));
-      await supabaseFetch('expenses', {
+      // on_conflict=id is required for upsert on the primary key via PostgREST
+      const expUpsertRes = await supabaseFetch('expenses?on_conflict=id', {
         method: 'POST',
-        headers: { 'Prefer': 'resolution=merge-duplicates' },
+        headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
         body: JSON.stringify(expRows)
       });
-      const expIds = expenses.map(e => `"${e.id}"`).join(',');
-      await supabaseFetch(`expenses?id=not.in.(${expIds})`, { method: 'DELETE' });
+      if (!expUpsertRes.ok) {
+        const errText = await expUpsertRes.text();
+        console.error('expenses upsert error:', errText);
+      }
+      // Delete removed expenses — IDs are plain strings (no quotes in PostgREST filter)
+      const idsCsv = expenses.map(e => e.id).join(',');
+      await supabaseFetch(`expenses?id=not.in.(${idsCsv})`, { method: 'DELETE' });
     } else {
-      await supabaseFetch('expenses?id=neq.', { method: 'DELETE' });
+      // Delete all expenses — use a filter that always matches
+      await supabaseFetch('expenses?created_at=gte.0', { method: 'DELETE' });
     }
 
-    // 3. Sync default_all_spends
-    await supabaseFetch('default_all_spends?id=gt.0', { method: 'DELETE' });
+    // 3. Sync default_all_spends — simpler: delete all then re-insert
+    await supabaseFetch('default_all_spends?id=gte.0', { method: 'DELETE' });
     if (defaultAllSpends.length > 0) {
       const bulkRows = defaultAllSpends.map(b => ({
         amount: Number(b.amount) || 0,

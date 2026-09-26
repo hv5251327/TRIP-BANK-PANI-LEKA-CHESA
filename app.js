@@ -602,7 +602,7 @@
                 Add
               </button>
             </form>
-            <div style="display:flex;align-items:center;gap:4px;">
+            <div class="pcard-undo-redo">
               <button type="button" class="btn-undo-person" data-person="${person}" title="Undo previous self-spending for ${person}">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
                 Undo

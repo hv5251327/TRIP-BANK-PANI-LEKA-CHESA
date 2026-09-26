@@ -412,14 +412,19 @@ borrowForm { display: flex; flex-direction: column; gap: 18px; }
 /* ── Self Spend Row (below name in a row) ── */
 .pcard-self-spend-row {
   display: flex; align-items: center; justify-content: space-between;
-  gap: 8px; padding: 10px 16px;
+  gap: 8px; row-gap: 6px; padding: 10px 16px;
   background: #ffffff; border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
 }
 
 .quick-spend-form {
   display: flex; align-items: center; gap: 6px;
-  flex: 1; min-width: 0;
+  flex: 1 1 auto; min-width: 0;
+}
+
+.pcard-undo-redo {
+  display: flex; align-items: center; gap: 4px;
+  flex-shrink: 0;
 }
 
 .qs-amt-wrap {
@@ -800,9 +805,15 @@ borrowForm { display: flex; flex-direction: column; gap: 18px; }
   .modal-bd           { padding: 14px 16px; gap: 12px; }
   .modal-ft           { padding: 12px 16px; }
 
-  /* Person cards self spend: clean inline row */
-  .pcard-self-spend-row { padding: 8px 10px; gap: 6px; }
-  .qs-amt-wrap        { width: 75px; }
+  /* Person cards self spend: prevent tick mark from overlapping with undo */
+  .pcard-self-spend-row { padding: 8px 10px; gap: 6px; row-gap: 6px; flex-wrap: wrap; }
+  .quick-spend-form   { flex: 1 1 auto; min-width: 0; gap: 4px; }
+  .qs-amt-wrap        { width: 68px; flex-shrink: 0; }
+  .qs-desc-input      { min-width: 50px; flex: 1; padding: 5px 6px; font-size: .75rem; }
+  .qs-btn             { padding: 5px 8px; font-size: .72rem; flex-shrink: 0; }
+  .pcard-undo-redo    { display: flex; align-items: center; gap: 4px; flex-shrink: 0; margin-left: auto; }
+  .btn-undo-person,
+  .btn-redo-person    { padding: 4px 7px; font-size: .7rem; flex-shrink: 0; }
 
   /* Footer */
   .app-footer         { flex-direction: column; align-items: flex-start; gap: 8px; }

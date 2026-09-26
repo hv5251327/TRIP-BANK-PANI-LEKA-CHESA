@@ -328,50 +328,43 @@
   // ─── SPEND AMOUNT CARDS ──────────────────────────────────────────────────────
   /**
    * Each person's card shows:
-   *  - Name + Balance badge at top
-   *  - List of expenses paid FOR them (description, date, share amount, who paid at bottom)
-   *  - Total share at the bottom
-   *  - "View full details →" link
+   *  - Name + inline quick-spend input + Balance chip at top
+   *  - List of expenses paid FOR them (description, who paid below each entry)
+   *  - Total share at bottom
+   *  - "View full breakdown →" link
    */
-  function renderPersonCards({ stats, forPerson, transactions }) {
+  function renderPersonCards({ stats, forPerson }) {
     if (!people.length) {
       personCards.innerHTML = `
         <div class="empty-state">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:#94a3b8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          <p>Add people and record expenses to see the split breakdown here.</p>
+          <p>Add people and record expenses to see the split here.</p>
         </div>`;
       return;
     }
 
     personCards.innerHTML = people.map(person => {
-      const stat = stats[person] || { totalPaid: 0, share: 0, balance: 0 };
-      const exps = forPerson[person] || [];
+      const stat    = stats[person] || { totalPaid: 0, share: 0, balance: 0 };
+      const exps    = forPerson[person] || [];
       const balance = stat.balance;
 
-      // Balance chip
-      let chipClass = 'chip--grey';
-      let chipText  = 'Settled';
-      if (balance > 0.01)       { chipClass = 'chip--green'; chipText = `+${fmtINR(balance)} to receive`; }
-      else if (balance < -0.01) { chipClass = 'chip--red';   chipText = `${fmtINR(Math.abs(balance))} to pay`; }
+      let chipClass = 'chip--grey', chipText = 'Settled';
+      if (balance >  0.01) { chipClass = 'chip--green'; chipText = `+${fmtINR(balance)} to receive`; }
+      if (balance < -0.01) { chipClass = 'chip--red';   chipText = `${fmtINR(Math.abs(balance))} to pay`; }
 
-      // Expense rows for this person
-      let expRows = '';
-      if (!exps.length) {
-        expRows = `<div class="pcard-no-expenses">No expenses recorded for ${person} yet.</div>`;
-      } else {
-        expRows = `<div class="pcard-expenses">` + exps.map(e => `
-          <div class="pexp-row">
-            <div class="pexp-left">
-              <span class="pexp-desc">${e.desc}</span>
-              <span class="pexp-paidby">
-                <span class="avatar-sm">${initials(e.paidBy)}</span>
-                Paid by ${e.paidBy} • ${fmtDate(e.date)}
-              </span>
-            </div>
-            <span class="pexp-amount">${fmtINR(e.share)}</span>
-          </div>
-        `).join('') + `</div>`;
-      }
+      const expRows = exps.length
+        ? `<div class="pcard-expenses">${exps.map(e => `
+            <div class="pexp-row">
+              <div class="pexp-left">
+                <span class="pexp-desc">${e.desc}</span>
+                <span class="pexp-paidby">
+                  <span class="avatar-sm">${initials(e.paidBy)}</span>
+                  Paid by ${e.paidBy} • ${fmtDate(e.date)}
+                </span>
+              </div>
+              <span class="pexp-amount">${fmtINR(e.share)}</span>
+            </div>`).join('')}</div>`
+        : `<div class="pcard-no-expenses">No expenses recorded for ${person} yet.</div>`;
 
       return `
         <div class="pcard">
@@ -380,7 +373,25 @@
               <div class="avatar">${initials(person)}</div>
               <span class="pcard-name">${person}</span>
             </div>
-            <span class="pcard-balance-chip ${chipClass}">${chipText}</span>
+            <div class="pcard-header-right">
+              <form class="quick-spend" data-person="${person}">
+                <div class="qs-wrap">
+                  <span class="qs-sym">₹</span>
+                  <input
+                    type="number"
+                    class="qs-input"
+                    placeholder="Self spend…"
+                    min="1"
+                    step="any"
+                    title="Quick: add a personal expense for ${person}"
+                  />
+                </div>
+                <button type="submit" class="qs-btn" title="Add">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
+                </button>
+              </form>
+              <span class="pcard-balance-chip ${chipClass}">${chipText}</span>
+            </div>
           </div>
 
           ${expRows}
@@ -391,25 +402,59 @@
           </div>
 
           <button class="view-details" data-person="${person}">View full breakdown →</button>
-        </div>
-      `;
+        </div>`;
     }).join('');
 
-    // Attach detail modal listeners
-    personCards.querySelectorAll('.view-details').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+    // ── Quick Spend: submit via Enter or button click
+    personCards.querySelectorAll('.quick-spend').forEach(form => {
+      const person = form.dataset.person;
+      const inp    = form.querySelector('.qs-input');
+      const btn    = form.querySelector('.qs-btn');
+
+      form.addEventListener('submit', e => {
+        e.preventDefault();
         e.stopPropagation();
-        const data = calculate();
-        openDetailModal(btn.dataset.person, data);
+        const amount = parseFloat(inp.value);
+        if (!amount || amount <= 0) {
+          inp.classList.add('qs-error');
+          inp.focus();
+          setTimeout(() => inp.classList.remove('qs-error'), 900);
+          return;
+        }
+        // Save: spentBy = person, spentFor = [person] (personal expense)
+        expenses.push({
+          id: genId(),
+          spentBy: person,
+          amount,
+          spentFor: [person],
+          description: 'Personal',
+          date: today(),
+          createdAt: Date.now()
+        });
+        save();
+        inp.value = '';
+        btn.classList.add('qs-ok');
+        setTimeout(() => btn.classList.remove('qs-ok'), 800);
+        renderAll();
+      });
+
+      // Prevent card click bubbling when user clicks the input
+      inp.addEventListener('click', e => e.stopPropagation());
+    });
+
+    // ── Detail modal: "View full breakdown" button
+    personCards.querySelectorAll('.view-details').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        openDetailModal(btn.dataset.person, calculate());
       });
     });
 
-    // Clicking the card itself also opens detail
+    // ── Clicking the card body also opens detail
     personCards.querySelectorAll('.pcard').forEach(card => {
       card.addEventListener('click', () => {
-        const data = calculate();
         const btn = card.querySelector('.view-details');
-        if (btn) openDetailModal(btn.dataset.person, data);
+        if (btn) openDetailModal(btn.dataset.person, calculate());
       });
     });
   }

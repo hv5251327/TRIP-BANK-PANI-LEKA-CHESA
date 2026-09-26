@@ -18,8 +18,6 @@
   const SK_AVGOVER         = 'ts_avgover_v2';
   const SK_REDO            = 'ts_redo_v2';
   const SK_AUTO_ALL_SPENDS = 'ts_auto_all_spends_v2';
-  const SK_GLOBAL_UNDO     = 'ts_global_undo_v2';
-  const SK_GLOBAL_REDO     = 'ts_global_redo_v2';
 
   // ─── STATE ───────────────────────────────────────────────────────────────────
   let people           = [];
@@ -181,10 +179,10 @@
   // Per-person redo stack for undo/redo (persisted to localStorage)
   let redoStacks = {};
 
-  // ── Global (whole-app) Undo/Redo history — snapshots of {people, expenses, customAvg, defaultAllSpends}
-  let globalUndoStack = [];
-  let globalRedoStack = [];
-  const GLOBAL_HISTORY_LIMIT = 50;
+  // ── Global (whole-app) Undo/Redo is now handled server-side (Supabase `recycle_bin`
+  //    table) so any change made by anyone, on any device, can be undone/redone by anyone.
+  let historyUndoCount = 0;
+  let historyRedoCount = 0;
 
   // Tracks which Spend Amount person cards are open, so re-rendering (e.g. after adding
   // a quick self-spend) doesn't collapse a card the person currently has open.
@@ -236,98 +234,100 @@
   const sortNames    = arr => [...(arr || [])].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
   const sortedPeople = () => sortNames(people);
 
-  // ─── GLOBAL UNDO/REDO (password protected, whole-app history) ────────────────
-  /** Deep snapshot of everything that can change */
-  function snapshotState() {
-    return JSON.stringify({ people, expenses, customAvg, defaultAllSpends });
-  }
+  // ─── GLOBAL UNDO/REDO (password protected, server-backed history) ────────────
+  // Every save() call POSTs the full trip state to /api/data. The server itself
+  // snapshots the *previous* state into the Supabase `recycle_bin` table before
+  // overwriting it, so undo/redo history is shared across every device and every
+  // person on the trip — not just the browser that happened to make the change.
 
-  /** Call this BEFORE any mutation to record the "before" state on the undo stack */
-  function pushUndoSnapshot() {
-    globalUndoStack.push(snapshotState());
-    if (globalUndoStack.length > GLOBAL_HISTORY_LIMIT) globalUndoStack.shift();
-    globalRedoStack = []; // any new action invalidates the redo trail
-    persistGlobalHistory();
-    updateUndoRedoBadges();
-  }
+  /** No-op: kept so existing call sites don't need to change. History is now
+   *  recorded automatically, server-side, whenever save() posts to /api/data. */
+  function pushUndoSnapshot() {}
 
-  /** Save the undo/redo history to localStorage so it survives page reloads / background sync */
-  function persistGlobalHistory() {
+  async function fetchHistoryStatus() {
     try {
-      localStorage.setItem(SK_GLOBAL_UNDO, JSON.stringify(globalUndoStack));
-      localStorage.setItem(SK_GLOBAL_REDO, JSON.stringify(globalRedoStack));
+      const res = await fetch('/api/history-status');
+      if (!res.ok) return;
+      const data = await res.json();
+      historyUndoCount = data.undoCount || 0;
+      historyRedoCount = data.redoCount || 0;
+      updateUndoRedoBadges();
     } catch {}
   }
 
-  /** Load the undo/redo history back from localStorage on startup */
-  function loadGlobalHistory() {
-    try {
-      globalUndoStack = JSON.parse(localStorage.getItem(SK_GLOBAL_UNDO)) || [];
-      globalRedoStack = JSON.parse(localStorage.getItem(SK_GLOBAL_REDO)) || [];
-    } catch {
-      globalUndoStack = [];
-      globalRedoStack = [];
-    }
-  }
+  /** Applies a state snapshot returned by /api/undo or /api/redo to the local UI. */
+  function applyServerSnapshot(snap) {
+    people           = Array.isArray(snap.people) ? snap.people : [];
+    expenses         = Array.isArray(snap.expenses) ? snap.expenses : [];
+    defaultAllSpends = Array.isArray(snap.defaultAllSpends) ? snap.defaultAllSpends : [];
 
-  function applySnapshot(json) {
-    try {
-      const d = JSON.parse(json);
-      people           = Array.isArray(d.people) ? d.people : [];
-      expenses         = Array.isArray(d.expenses) ? d.expenses : [];
-      customAvg        = (d.customAvg !== undefined) ? d.customAvg : null;
-      defaultAllSpends = Array.isArray(d.defaultAllSpends) ? d.defaultAllSpends : [];
-    } catch {
-      return;
-    }
-    save();
+    // Keep the local cache in sync — no need to re-POST, the server is already correct
+    localStorage.setItem(SK_PEOPLE,          JSON.stringify(people));
+    localStorage.setItem(SK_EXPENSES,        JSON.stringify(expenses));
+    localStorage.setItem(SK_AUTO_ALL_SPENDS, JSON.stringify(defaultAllSpends));
+    _lastServerSnapshot = JSON.stringify({ people, expenses, customAvg, defaultAllSpends });
+
     renderAll();
-    persistGlobalHistory();
-    updateUndoRedoBadges();
   }
 
   function updateUndoRedoBadges() {
     if (undoBadge) {
-      undoBadge.style.display = globalUndoStack.length ? 'inline-block' : 'none';
-      undoBadge.textContent = globalUndoStack.length;
+      undoBadge.style.display = historyUndoCount ? 'inline-block' : 'none';
+      undoBadge.textContent = historyUndoCount;
     }
     if (redoBadge) {
-      redoBadge.style.display = globalRedoStack.length ? 'inline-block' : 'none';
-      redoBadge.textContent = globalRedoStack.length;
+      redoBadge.style.display = historyRedoCount ? 'inline-block' : 'none';
+      redoBadge.textContent = historyRedoCount;
     }
-    if (btnGlobalUndo) btnGlobalUndo.disabled = globalUndoStack.length === 0;
-    if (btnGlobalRedo) btnGlobalRedo.disabled = globalRedoStack.length === 0;
+    if (btnGlobalUndo) btnGlobalUndo.disabled = historyUndoCount === 0;
+    if (btnGlobalRedo) btnGlobalRedo.disabled = historyRedoCount === 0;
   }
 
   if (btnGlobalUndo) {
     btnGlobalUndo.addEventListener('click', async () => {
-      if (!globalUndoStack.length) {
+      if (!historyUndoCount) {
         await uiAlert('Nothing to Undo', 'No actions are available to undo yet.', { icon: 'ℹ️' });
         return;
       }
-      const authorized = await verifyAdminPassword('Undo Last Action', 'Enter the admin password to undo the most recent change.');
+      const authorized = await verifyAdminPassword('Undo Last Action', 'Enter the admin password to undo the most recent change — made by anyone on this trip.');
       if (!authorized) return;
 
-      const current = snapshotState();
-      const prev = globalUndoStack.pop();
-      globalRedoStack.push(current);
-      applySnapshot(prev);
+      try {
+        const res  = await fetch('/api/undo', { method: 'POST' });
+        const json = await res.json();
+        if (!json.ok) {
+          await uiAlert('Nothing to Undo', 'No actions are available to undo yet.', { icon: 'ℹ️' });
+        } else {
+          applyServerSnapshot(json.data);
+        }
+      } catch {
+        await uiAlert('Undo Failed', "Couldn't reach the server to undo. Check your connection and try again.", { icon: '⚠️', type: 'danger' });
+      }
+      fetchHistoryStatus();
     });
   }
 
   if (btnGlobalRedo) {
     btnGlobalRedo.addEventListener('click', async () => {
-      if (!globalRedoStack.length) {
+      if (!historyRedoCount) {
         await uiAlert('Nothing to Redo', 'No undone actions are available to redo.', { icon: 'ℹ️' });
         return;
       }
       const authorized = await verifyAdminPassword('Redo Action', 'Enter the admin password to redo the last undone change.');
       if (!authorized) return;
 
-      const current = snapshotState();
-      const next = globalRedoStack.pop();
-      globalUndoStack.push(current);
-      applySnapshot(next);
+      try {
+        const res  = await fetch('/api/redo', { method: 'POST' });
+        const json = await res.json();
+        if (!json.ok) {
+          await uiAlert('Nothing to Redo', 'No undone actions are available to redo.', { icon: 'ℹ️' });
+        } else {
+          applyServerSnapshot(json.data);
+        }
+      } catch {
+        await uiAlert('Redo Failed', "Couldn't reach the server to redo. Check your connection and try again.", { icon: '⚠️', type: 'danger' });
+      }
+      fetchHistoryStatus();
     });
   }
 
@@ -1457,7 +1457,7 @@
           `This will mark the borrow as fully paid back by all ${beneficiaries.length} people (${fmtINR(exp.isBorrow ? exp.amount * beneficiaries.length : exp.amount)} total) and remove it.\n\nProceed?`,
           { icon: '🗑️', confirmLabel: 'Yes, Settle All', type: 'danger' }
         );
-        if (!ok) { globalUndoStack.pop(); persistGlobalHistory(); updateUndoRedoBadges(); return; }
+        if (!ok) return;
         expenses = expenses.filter(x => x.id !== expId);
       } else if (isMulti && selectedPerson) {
         const newSpentFor = exp.spentFor.filter(p => p !== selectedPerson);
@@ -1469,7 +1469,7 @@
       } else {
         if (reduceBy >= exp.amount) {
           const ok = await uiConfirm('Remove Borrow?', `Reducing by ₹${reduceBy} will remove this borrow completely.\n\nCurrent amount: ₹${exp.amount}\n\nProceed?`, { icon: '🗑️', confirmLabel: 'Yes, Remove' });
-          if (!ok) { globalUndoStack.pop(); persistGlobalHistory(); updateUndoRedoBadges(); return; }
+          if (!ok) return;
           expenses = expenses.filter(x => x.id !== expId);
         } else {
           exp.amount = Math.round((exp.amount - reduceBy) * 100) / 100;
@@ -1492,6 +1492,10 @@
       inpAmount.value = calc;
     }
     const amount      = calc;
+    // Captured BEFORE resetForm() clears the checkbox — true if the user picked
+    // "Everyone in the trip" (meaning this expense covers the payer too, not just
+    // the people they're lending to).
+    const includeEveryone = chkEveryone.checked;
     const spentFor    = Array.from(individualChks.querySelectorAll('input:checked')).map(c => c.value);
     const description = inpDesc.value.trim();
     const date        = inpDate.value || today();
@@ -1532,6 +1536,23 @@
       isBorrow: true,
       createdAt: Date.now()
     });
+
+    // If "Everyone in the trip" was selected, the payer is covering their own
+    // share of this expense too — log it as their personal self-spend so it
+    // shows under their own Spend Amount card and counts in Total Trip Spending.
+    if (includeEveryone) {
+      expenses.push({
+        id: genId(),
+        spentBy,
+        amount,
+        spentFor: [spentBy],
+        description: description || 'Borrow',
+        date,
+        isSelfSpend: true,
+        createdAt: Date.now()
+      });
+    }
+
     save();
     renderAll();
     resetForm();
@@ -1828,9 +1849,9 @@
       expandedPersonCards = new Set();
       localStorage.clear();
       save();
-      persistGlobalHistory();
       renderAll();
       resetForm();
+      fetchHistoryStatus();
       await uiAlert('Data Cleared', 'All site data has been reset and cleared successfully!', { icon: '✅', type: 'success' });
     } else {
       await uiAlert('Wrong Password', 'Incorrect password! Data was not cleared.', { icon: '🔒', type: 'danger' });
@@ -1991,7 +2012,6 @@
   async function init() {
     // 1) Load from localStorage first (instant, works offline)
     load();
-    loadGlobalHistory();
     inpDate.value = today();
     renderAll();
     renderIndividualCheckboxes();
@@ -1999,9 +2019,13 @@
 
     // 2) Try to load from server — server always wins (shared source of truth)
     await loadFromServer(false);
+    await fetchHistoryStatus();
 
-    // 3) Poll every 8 seconds to catch updates from other devices
-    setInterval(() => loadFromServer(false), 8000);
+    // 3) Poll every 8 seconds to catch updates (and undo/redo availability) from other devices
+    setInterval(() => {
+      loadFromServer(false);
+      fetchHistoryStatus();
+    }, 8000);
 
     // 4) Register Service Worker for offline capability
     if ('serviceWorker' in navigator) {

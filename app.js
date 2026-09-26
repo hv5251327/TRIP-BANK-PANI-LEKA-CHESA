@@ -10,15 +10,17 @@
   'use strict';
 
   // ─── STORAGE KEYS ────────────────────────────────────────────────────────────
-  const SK_PEOPLE   = 'ts_people_v2';
-  const SK_EXPENSES = 'ts_expenses_v2';
-  const SK_AVGOVER  = 'ts_avgover_v2';
-  const SK_REDO     = 'ts_redo_v2';
+  const SK_PEOPLE          = 'ts_people_v2';
+  const SK_EXPENSES        = 'ts_expenses_v2';
+  const SK_AVGOVER         = 'ts_avgover_v2';
+  const SK_REDO            = 'ts_redo_v2';
+  const SK_AUTO_ALL_SPENDS = 'ts_auto_all_spends_v2';
 
   // ─── STATE ───────────────────────────────────────────────────────────────────
-  let people   = [];
-  let expenses = [];
-  let customAvg = null;  // null = auto-calculated
+  let people           = [];
+  let expenses         = [];
+  let customAvg        = null;  // null = auto-calculated
+  let defaultAllSpends = [];
 
   // ─── DOM REFS ────────────────────────────────────────────────────────────────
   const $ = id => document.getElementById(id);
@@ -42,6 +44,7 @@
   const borrowForm        = $('borrowForm');
   const spenderGrid       = $('spenderGrid');
   const inpAmount         = $('inpAmount');
+  const amountCalcHint    = $('amountCalcHint');
   const chkEveryone       = $('chkEveryone');
   const individualChks    = $('individualChks');
   const spentForCounter   = $('spentForCounter');
@@ -146,6 +149,7 @@
   const modalBulkSpend    = $('modalBulkSpend');
   const formBulkSpend     = $('formBulkSpend');
   const bulkAmount        = $('bulkAmount');
+  const bulkCalcHint      = $('bulkCalcHint');
   const bulkDesc          = $('bulkDesc');
   const bulkSpendDate     = $('bulkSpendDate');
   const bulkMemberTags    = $('bulkMemberTags');
@@ -162,6 +166,25 @@
     });
   };
 
+  /**
+   * Safely evaluates numbers and division/math expressions (e.g. "16000/8" -> 2000).
+   */
+  const evalAmount = val => {
+    if (val === null || val === undefined) return NaN;
+    const s = String(val).trim();
+    if (!s) return NaN;
+    if (/^\d+(\.\d+)?$/.test(s)) return parseFloat(s);
+    if (/^[0-9+\-*/. ()]+$/.test(s)) {
+      try {
+        const res = Function(`'use strict'; return (${s})`)();
+        if (typeof res === 'number' && !isNaN(res) && isFinite(res)) {
+          return Math.round(res * 100) / 100;
+        }
+      } catch {}
+    }
+    return NaN;
+  };
+
   const initials = name => (name || '?').trim()[0].toUpperCase();
   const genId    = () => 'exp_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
   const today    = () => new Date().toISOString().split('T')[0];
@@ -174,20 +197,22 @@
   // ─── PERSISTENCE ─────────────────────────────────────────────────────────────
   function load() {
     try {
-      people   = JSON.parse(localStorage.getItem(SK_PEOPLE))   || [];
-      expenses = JSON.parse(localStorage.getItem(SK_EXPENSES)) || [];
-      const ca = localStorage.getItem(SK_AVGOVER);
-      customAvg = ca !== null ? parseFloat(ca) : null;
-      redoStacks = JSON.parse(localStorage.getItem(SK_REDO)) || {};
+      people           = JSON.parse(localStorage.getItem(SK_PEOPLE))   || [];
+      expenses         = JSON.parse(localStorage.getItem(SK_EXPENSES)) || [];
+      const ca         = localStorage.getItem(SK_AVGOVER);
+      customAvg        = ca !== null ? parseFloat(ca) : null;
+      redoStacks       = JSON.parse(localStorage.getItem(SK_REDO)) || {};
+      defaultAllSpends = JSON.parse(localStorage.getItem(SK_AUTO_ALL_SPENDS)) || [];
     } catch {
-      people = []; expenses = []; customAvg = null; redoStacks = {};
+      people = []; expenses = []; customAvg = null; redoStacks = {}; defaultAllSpends = [];
     }
   }
 
   function save() {
-    localStorage.setItem(SK_PEOPLE,   JSON.stringify(people));
-    localStorage.setItem(SK_EXPENSES, JSON.stringify(expenses));
-    localStorage.setItem(SK_REDO,     JSON.stringify(redoStacks));
+    localStorage.setItem(SK_PEOPLE,          JSON.stringify(people));
+    localStorage.setItem(SK_EXPENSES,        JSON.stringify(expenses));
+    localStorage.setItem(SK_REDO,            JSON.stringify(redoStacks));
+    localStorage.setItem(SK_AUTO_ALL_SPENDS, JSON.stringify(defaultAllSpends));
     if (customAvg !== null) localStorage.setItem(SK_AVGOVER, customAvg);
     else localStorage.removeItem(SK_AVGOVER);
   }
@@ -1055,7 +1080,7 @@
     e.preventDefault();
 
     const spentBy     = getSelectedSpender(spenderGrid);
-    const amount      = parseFloat(inpAmount.value);
+    const amount      = evalAmount(inpAmount.value);
     const spentFor    = Array.from(individualChks.querySelectorAll('input:checked')).map(c => c.value);
     const description = inpDesc.value.trim();
     const date        = inpDate.value || today();
@@ -1100,9 +1125,33 @@
     resetForm();
   });
 
+  // Live division/math hint for borrow amount (e.g. 16000/8 -> = ₹2,000)
+  inpAmount.addEventListener('input', () => {
+    const val = inpAmount.value.trim();
+    if (val.includes('/') || val.includes('*') || val.includes('+') || (val.includes('-') && !val.startsWith('-'))) {
+      const calc = evalAmount(val);
+      if (!isNaN(calc) && calc > 0) {
+        if (amountCalcHint) {
+          amountCalcHint.textContent = `Calculated: ₹${calc.toLocaleString('en-IN')}`;
+          amountCalcHint.style.display = 'block';
+        }
+      } else if (amountCalcHint) {
+        amountCalcHint.style.display = 'none';
+      }
+    } else if (amountCalcHint) {
+      amountCalcHint.style.display = 'none';
+    }
+  });
+
   // ─── RESET FORM (COMPLETE – no persistent spender) ───────────────────────────
   function resetForm() {
     borrowForm.reset();
+
+    // Clear calculation preview
+    if (amountCalcHint) {
+      amountCalcHint.textContent = '';
+      amountCalcHint.style.display = 'none';
+    }
 
     // Deselect all spender cards
     spenderGrid.querySelectorAll('.spender-card').forEach(c => {
@@ -1168,6 +1217,23 @@
       return;
     }
     people.push(name);
+
+    // If any spendings were marked for "All (including new registers)", auto-add them for this new person
+    if (defaultAllSpends && defaultAllSpends.length) {
+      defaultAllSpends.forEach(rule => {
+        expenses.push({
+          id: genId(),
+          spentBy: name,
+          amount: rule.amount,
+          spentFor: [name],
+          description: rule.description,
+          date: rule.date || today(),
+          isSelfSpend: true,
+          createdAt: Date.now()
+        });
+      });
+    }
+
     save();
     closeModal(modalAddPerson);
     renderAll();
@@ -1311,7 +1377,7 @@
     );
     if (pwd === null) return; // cancelled
     if (pwd === 'mingutha') {
-      people = []; expenses = []; customAvg = null; redoStacks = {};
+      people = []; expenses = []; customAvg = null; redoStacks = {}; defaultAllSpends = [];
       localStorage.clear();
       save();
       renderAll();
@@ -1328,30 +1394,61 @@
   // ─── BULK PERSONAL SPEND (⚡ Add for All) ────────────────────────────────────
   if (btnBulkSpend) {
     btnBulkSpend.addEventListener('click', () => {
-      if (!people.length) {
-        uiAlert('No Members Yet', 'Add some trip members first before recording personal spending.', { icon: 'ℹ️' });
-        return;
-      }
       if (bulkMemberTags) {
-        bulkMemberTags.innerHTML = people.map(p => `<span class="pill">${p}</span>`).join('');
+        bulkMemberTags.innerHTML = people.length
+          ? people.map(p => `<span class="pill">${p}</span>`).join('')
+          : '<span style="color:var(--light)">No members yet. Will apply to new registers.</span>';
       }
       if (bulkAmount) bulkAmount.value = '';
       if (bulkDesc)   bulkDesc.value = '';
       if (bulkSpendDate) bulkSpendDate.value = today();
+      if (bulkCalcHint) {
+        bulkCalcHint.textContent = '';
+        bulkCalcHint.style.display = 'none';
+      }
+      const existingRadio = formBulkSpend ? formBulkSpend.querySelector('input[name="bulkTargetScope"][value="existing"]') : null;
+      const allRadio      = formBulkSpend ? formBulkSpend.querySelector('input[name="bulkTargetScope"][value="all_and_new"]') : null;
+      if (people.length === 0) {
+        if (allRadio) allRadio.checked = true;
+      } else {
+        if (existingRadio) existingRadio.checked = true;
+      }
       openModal(modalBulkSpend);
       if (bulkAmount) setTimeout(() => bulkAmount.focus(), 80);
+    });
+  }
+
+  // Live division/math hint for bulk spend amount
+  if (bulkAmount) {
+    bulkAmount.addEventListener('input', () => {
+      const val = bulkAmount.value.trim();
+      if (val.includes('/') || val.includes('*') || val.includes('+') || (val.includes('-') && !val.startsWith('-'))) {
+        const calc = evalAmount(val);
+        if (!isNaN(calc) && calc > 0) {
+          if (bulkCalcHint) {
+            bulkCalcHint.textContent = `Calculated: ₹${calc.toLocaleString('en-IN')}`;
+            bulkCalcHint.style.display = 'block';
+          }
+        } else if (bulkCalcHint) {
+          bulkCalcHint.style.display = 'none';
+        }
+      } else if (bulkCalcHint) {
+        bulkCalcHint.style.display = 'none';
+      }
     });
   }
 
   if (formBulkSpend) {
     formBulkSpend.addEventListener('submit', async e => {
       e.preventDefault();
-      const amount = parseFloat(bulkAmount.value);
+      const amount = evalAmount(bulkAmount.value);
       const desc   = bulkDesc.value.trim();
       const date   = bulkSpendDate.value || today();
+      const scopeRadio = formBulkSpend.querySelector('input[name="bulkTargetScope"]:checked');
+      const applyToFuture = scopeRadio ? scopeRadio.value === 'all_and_new' : false;
 
       if (!amount || amount <= 0) {
-        await uiAlert('Invalid Amount', 'Please enter a valid amount greater than 0.', { icon: '⚠️', type: 'danger' });
+        await uiAlert('Invalid Amount', 'Please enter a valid amount greater than 0 (e.g. 16000/8 or 500).', { icon: '⚠️', type: 'danger' });
         bulkAmount.focus();
         return;
       }
@@ -1362,7 +1459,7 @@
         return;
       }
 
-      // Add the exact personal spend for each trip member
+      // Add personal spend for each existing trip member
       people.forEach(p => {
         expenses.push({
           id: genId(),
@@ -1375,6 +1472,15 @@
           createdAt: Date.now()
         });
       });
+
+      // If user selected "All members (existing + auto-add to new registers)", save rule for future registers
+      if (applyToFuture) {
+        defaultAllSpends.push({
+          amount,
+          description: desc,
+          date
+        });
+      }
 
       save();
       closeModal(modalBulkSpend);

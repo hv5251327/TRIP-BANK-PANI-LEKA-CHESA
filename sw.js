@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trip-bank-v2';
+const CACHE_NAME = 'trip-bank-v3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

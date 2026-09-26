@@ -407,7 +407,7 @@
     const totalSpend = expenses.reduce((s, e) => {
       const amount = Number(e.amount) || 0;
       const cnt = Array.isArray(e.spentFor) ? e.spentFor.length : 1;
-      return s + (e.isBorrow ? amount * (cnt + 1) : amount);
+      return s + (e.isBorrow ? amount * (cnt) : amount);
     }, 0);
     const n = people.length;
     const autoAvg = n > 1 ? (totalSpend / (n - 1)) : 0;

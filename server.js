@@ -178,6 +178,94 @@ async function saveToSupabase(data) {
   }
 }
 
+// ─── Recycle Bin (shared, server-side Undo/Redo history) ────────────────────
+// Every save() from any client goes through POST /api/data. Before that new
+// state overwrites the old one, we snapshot the *previous* state into the
+// `recycle_bin` table as an 'undo' entry (and clear any 'redo' entries, since
+// a fresh action invalidates the redo trail). /api/undo and /api/redo pop the
+// most recent entry off the relevant stack and restore it — this way ANY
+// person, on ANY device, can undo or redo the most recent change made by
+// anyone on the trip, not just their own local edits.
+const RECYCLE_LIMIT = 50; // keep at most this many entries per stack
+
+async function pushRecycleBin(stackType, snapshot) {
+  try {
+    const insertRes = await supabaseFetch('recycle_bin', {
+      method: 'POST',
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify([{ stack_type: stackType, snapshot }])
+    });
+    if (!insertRes.ok) {
+      console.error('recycle_bin insert error:', await insertRes.text());
+      return;
+    }
+    // Trim old entries beyond the limit so the table doesn't grow unbounded
+    const overflowRes = await supabaseFetch(
+      `recycle_bin?stack_type=eq.${stackType}&select=id&order=id.desc&offset=${RECYCLE_LIMIT}`
+    );
+    if (overflowRes.ok) {
+      const rows = await overflowRes.json();
+      if (rows.length) {
+        const ids = rows.map(r => r.id).join(',');
+        await supabaseFetch(`recycle_bin?id=in.(${ids})`, { method: 'DELETE' });
+      }
+    }
+  } catch (err) {
+    console.error('pushRecycleBin error:', err.message);
+  }
+}
+
+async function popRecycleBin(stackType) {
+  try {
+    const res = await supabaseFetch(`recycle_bin?stack_type=eq.${stackType}&select=*&order=id.desc&limit=1`);
+    if (!res.ok) return null;
+    const rows = await res.json();
+    if (!rows.length) return null;
+    const row = rows[0];
+    await supabaseFetch(`recycle_bin?id=eq.${row.id}`, { method: 'DELETE' });
+    return row.snapshot;
+  } catch (err) {
+    console.error('popRecycleBin error:', err.message);
+    return null;
+  }
+}
+
+async function clearRecycleBin(stackType) {
+  try {
+    await supabaseFetch(`recycle_bin?stack_type=eq.${stackType}`, { method: 'DELETE' });
+  } catch (err) {
+    console.error('clearRecycleBin error:', err.message);
+  }
+}
+
+async function countRecycleBin() {
+  try {
+    const [uRes, rRes] = await Promise.all([
+      supabaseFetch('recycle_bin?stack_type=eq.undo&select=id'),
+      supabaseFetch('recycle_bin?stack_type=eq.redo&select=id')
+    ]);
+    const u = uRes.ok ? await uRes.json() : [];
+    const r = rRes.ok ? await rRes.json() : [];
+    return { undoCount: u.length, redoCount: r.length };
+  } catch (err) {
+    console.error('countRecycleBin error:', err.message);
+    return { undoCount: 0, redoCount: 0 };
+  }
+}
+
+/** Returns the current shared trip state (Supabase first, local file as fallback). */
+async function getCurrentState() {
+  const sb = await loadFromSupabase();
+  if (sb) return sb;
+  return tripData || { people: [], expenses: [], defaultAllSpends: [] };
+}
+
+/** Writes `data` as the new current state (local file + Supabase). */
+async function commitState(data) {
+  saveDataFile(data);
+  await saveToSupabase(data);
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function sendJson(res, statusCode, obj) {
   const body = JSON.stringify(obj);
@@ -233,12 +321,56 @@ const server = http.createServer(async (req, res) => {
     try {
       const body = await readBody(req);
       const incoming = JSON.parse(body);
-      saveDataFile(incoming); // always persist locally as instant backup
-      saveToSupabase(incoming); // sync to Supabase tables
+
+      // Snapshot the state as it stood BEFORE this write, so it can be undone.
+      // Any new, ordinary save invalidates the redo trail (a fresh action was taken).
+      const previous = await getCurrentState();
+      const hadAnyData = (previous.people && previous.people.length) || (previous.expenses && previous.expenses.length);
+      if (hadAnyData) {
+        await pushRecycleBin('undo', previous);
+        await clearRecycleBin('redo');
+      }
+
+      await commitState(incoming); // always persist locally as instant backup + sync to Supabase
       sendJson(res, 200, { ok: true });
     } catch {
       sendJson(res, 400, { ok: false, error: 'Invalid JSON' });
     }
+    return;
+  }
+
+  // ── POST /api/undo – restore the most recent shared undo snapshot ────────────
+  if (pathname === '/api/undo' && method === 'POST') {
+    const snap = await popRecycleBin('undo');
+    if (!snap) {
+      sendJson(res, 200, { ok: false, error: 'empty' });
+      return;
+    }
+    const current = await getCurrentState();
+    await pushRecycleBin('redo', current);
+    await commitState(snap);
+    sendJson(res, 200, { ok: true, data: snap });
+    return;
+  }
+
+  // ── POST /api/redo – restore the most recent shared redo snapshot ────────────
+  if (pathname === '/api/redo' && method === 'POST') {
+    const snap = await popRecycleBin('redo');
+    if (!snap) {
+      sendJson(res, 200, { ok: false, error: 'empty' });
+      return;
+    }
+    const current = await getCurrentState();
+    await pushRecycleBin('undo', current);
+    await commitState(snap);
+    sendJson(res, 200, { ok: true, data: snap });
+    return;
+  }
+
+  // ── GET /api/history-status – undo/redo counts, for badges on any device ─────
+  if (pathname === '/api/history-status' && method === 'GET') {
+    const counts = await countRecycleBin();
+    sendJson(res, 200, counts);
     return;
   }
 

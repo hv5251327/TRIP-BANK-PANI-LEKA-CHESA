@@ -161,6 +161,9 @@
   const scopeCardExisting   = $('scopeCardExisting');
   const scopeCardAllNew     = $('scopeCardAllNew');
 
+  // Admin password used to protect Add Person / Delete Person / Clear All
+  const ADMIN_PASSWORD = 'mingutha';
+
   // Per-person redo stack for undo/redo (persisted to localStorage)
   let redoStacks = {};
 
@@ -375,6 +378,18 @@
   popupInput.addEventListener('keydown', e => { if (e.key === 'Enter') _closePopup(popupInput.value); });
   modalPopup.addEventListener('click', e => { if (e.target === modalPopup) _closePopup(_popupIsPrompt ? null : false); });
 
+  /**
+   * Prompts for the admin password and resolves true only if it matches.
+   * Shows a "wrong password" alert on mismatch. Resolves false if cancelled or wrong.
+   */
+  async function verifyAdminPassword(title, msg) {
+    const pwd = await uiPrompt(title, msg, { icon: '🔒', inputType: 'password', placeholder: 'Password…', submitLabel: 'Confirm' });
+    if (pwd === null) return false; // cancelled
+    if (pwd === ADMIN_PASSWORD) return true;
+    await uiAlert('Wrong Password', 'Incorrect password! Action was not performed.', { icon: '🔒', type: 'danger' });
+    return false;
+  }
+
   // ─── CALCULATIONS ────────────────────────────────────────────────────────────
   /**
    * Returns per-person stats and optimal settlement transactions.
@@ -388,14 +403,14 @@
    *   expensesForPerson[person] = [ { desc, date, share, paidBy }, ... ]
    */
   function calculate() {
-    // totalSpend: for borrows, payer paid full amount FOR EACH beneficiary
+    // totalSpend: for borrows, payer paid full amount FOR EACH beneficiary, plus themselves (cnt + 1)
     const totalSpend = expenses.reduce((s, e) => {
       const amount = Number(e.amount) || 0;
       const cnt = Array.isArray(e.spentFor) ? e.spentFor.length : 1;
-      return s + (e.isBorrow ? amount * cnt : amount);
+      return s + (e.isBorrow ? amount * (cnt + 1) : amount);
     }, 0);
     const n = people.length;
-    const autoAvg = n > 0 ? (totalSpend / n) : 0;
+    const autoAvg = n > 1 ? (totalSpend / (n - 1)) : 0;
 
     // Init per-person buckets
     const stats = {};
@@ -550,7 +565,7 @@
     elPeopleCount.textContent  = people.length;
 
     elAvgPerPerson.innerHTML = `${fmtINR(autoAvg)} <span class="per-person">/ person</span>`;
-    elAvgFormula.textContent = 'Total ÷ People';
+    elAvgFormula.textContent = 'Total ÷ (People − 1)';
 
     // Member pills
     elMemberPills.innerHTML = people.map(p => `<span class="pill">${p}</span>`).join('');
@@ -1389,7 +1404,7 @@
     setTimeout(() => inpPersonName.focus(), 80);
   });
 
-  formAddPerson.addEventListener('submit', e => {
+  formAddPerson.addEventListener('submit', async e => {
     e.preventDefault();
     const name = inpPersonName.value.trim();
     if (!name) {
@@ -1402,6 +1417,11 @@
       personNameErr.classList.add('show');
       return;
     }
+
+    // Require admin password before adding a new person
+    const authorized = await verifyAdminPassword('Add Person', `Enter the admin password to add "${name}" to the trip.`);
+    if (!authorized) return;
+
     people.push(name);
 
     // If any spendings were marked for "All (including new registers)", auto-add them for this new person
@@ -1430,6 +1450,11 @@
     const btn = e.target.closest('.pill-del');
     if (!btn) return;
     const name = btn.dataset.name;
+
+    // Require admin password before removing a person
+    const authorized = await verifyAdminPassword('Remove Person', `Enter the admin password to remove "${name}" from the trip.`);
+    if (!authorized) return;
+
     const ok = await uiConfirm(
       `Remove "${name}"?`,
       `All expenses involving ${name} will also be permanently deleted.\n\nThis action cannot be undone.`,
@@ -1568,7 +1593,7 @@
       { icon: '🗑️', inputType: 'password', placeholder: 'Password…', submitLabel: 'Clear Data' }
     );
     if (pwd === null) return; // cancelled
-    if (pwd === 'mingutha') {
+    if (pwd === ADMIN_PASSWORD) {
       people = []; expenses = []; customAvg = null; redoStacks = {}; defaultAllSpends = [];
       localStorage.clear();
       save();

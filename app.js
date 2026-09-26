@@ -124,6 +124,7 @@
   // Footer
   const btnExport         = $('btnExport');
   const btnClearAll       = $('btnClearAll');
+  const btnClearTop       = $('btnClearTop');
 
   // Per-person redo stack for undo/redo
   const redoStacks = {};
@@ -1123,6 +1124,23 @@
   btnClearAll.addEventListener('click', () => {
     const pwd = prompt('Enter password to clear and reset all data in site:');
     if (pwd === null) return; // User pressed Cancel
+    if (pwd === 'mingutha') {
+      people = [];
+      expenses = [];
+      customAvg = null;
+      localStorage.clear();
+      save();
+      renderAll();
+      resetForm();
+      alert('All site data has been reset and cleared successfully!');
+    } else {
+      alert('Incorrect password! Data was not cleared.');
+    }
+  });
+
+  btnClearTop.addEventListener('click', () => {
+    const pwd = prompt('Enter password to clear and reset all data in site:');
+    if (pwd === null) return;
     if (pwd === 'mingutha') {
       people = [];
       expenses = [];

@@ -112,6 +112,19 @@ body {
 .btn-link { background: none; border: none; font-size: .8125rem; font-weight: 500; color: var(--muted); cursor: pointer; padding: 3px 6px; }
 .btn-link:hover { color: var(--blue); text-decoration: underline; }
 .btn-link--red:hover { color: var(--red); }
+.btn-danger-top {
+  background: var(--red-s);
+  border: 1px solid var(--red-b);
+  color: var(--red-d);
+  font-size: .8125rem;
+  padding: 8px 14px;
+}
+.btn-danger-top:hover {
+  background: var(--red);
+  color: #fff;
+  border-color: var(--red);
+  transform: translateY(-1px);
+}
 
 /* ---- TOP METRICS ---- */
 .top-metrics {

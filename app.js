@@ -207,7 +207,12 @@
       people           = JSON.parse(localStorage.getItem(SK_PEOPLE))   || [];
       expenses         = JSON.parse(localStorage.getItem(SK_EXPENSES)) || [];
       const ca         = localStorage.getItem(SK_AVGOVER);
-      customAvg        = ca !== null ? parseFloat(ca) : null;
+      if (ca !== null && ca !== '' && ca !== 'null' && ca !== 'undefined') {
+        const parsed = parseFloat(ca);
+        customAvg = (!isNaN(parsed) && parsed > 0) ? parsed : null;
+      } else {
+        customAvg = null;
+      }
       redoStacks       = JSON.parse(localStorage.getItem(SK_REDO)) || {};
       defaultAllSpends = JSON.parse(localStorage.getItem(SK_AUTO_ALL_SPENDS)) || [];
     } catch {
@@ -220,7 +225,7 @@
     localStorage.setItem(SK_EXPENSES,        JSON.stringify(expenses));
     localStorage.setItem(SK_REDO,            JSON.stringify(redoStacks));
     localStorage.setItem(SK_AUTO_ALL_SPENDS, JSON.stringify(defaultAllSpends));
-    if (customAvg !== null) localStorage.setItem(SK_AVGOVER, customAvg);
+    if (customAvg !== null && !isNaN(customAvg) && customAvg > 0) localStorage.setItem(SK_AVGOVER, customAvg);
     else localStorage.removeItem(SK_AVGOVER);
   }
 
@@ -315,12 +320,10 @@
    *   expensesForPerson[person] = [ { desc, date, share, paidBy }, ... ]
    */
   function calculate() {
-    // totalSpend = all expenses (including self-spends) for "Total Trip Spending" display
+    // totalSpend = all expenses across the trip
     const totalSpend = expenses.reduce((s, e) => s + (Number(e.amount)||0), 0);
-    // groupSpend = only group/borrow expenses (excluding personal self-spends) for Average Per Person
-    const groupSpend = expenses.filter(e => !e.isSelfSpend).reduce((s, e) => s + (Number(e.amount)||0), 0);
-    const n = people.length || 1;
-    const autoAvg = groupSpend / n;
+    const n = people.length;
+    const autoAvg = n > 0 ? (totalSpend / n) : 0;
 
     // Init per-person buckets
     const stats = {};

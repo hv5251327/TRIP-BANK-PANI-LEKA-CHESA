@@ -162,12 +162,12 @@
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-secondary btn-global-undoredo" id="btnGlobalUndo" title="Undo last action (password protected)">
+        <button class="btn btn-secondary btn-global-undoredo" id="btnGlobalUndo" title="Undo the last action made by anyone on this trip (password protected)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
           Undo
           <span class="ur-badge" id="undoBadge" style="display:none;">0</span>
         </button>
-        <button class="btn btn-secondary btn-global-undoredo" id="btnGlobalRedo" title="Redo last undone action (password protected)">
+        <button class="btn btn-secondary btn-global-undoredo" id="btnGlobalRedo" title="Redo the last undone action, for everyone on this trip (password protected)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></svg>
           Redo
           <span class="ur-badge" id="redoBadge" style="display:none;">0</span>
@@ -243,7 +243,7 @@
                 <span class="counter-badge" id="spentForCounter">0 selected</span>
               </div>
               <div class="checkbox-box">
-                <label class="chk-item chk-everyone">
+                <label class="chk-item chk-everyone" title="Also logs the payer's own share as a personal self-spend, so it shows on their Spend Amount card and counts in Total Trip Spending">
                   <input type="checkbox" id="chkEveryone" />
                   <span class="chk-box"></span>
                   <span class="chk-label">Everyone in the trip</span>

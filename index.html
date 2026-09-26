@@ -3,336 +3,218 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TripSplit - Trip Expense Sharing & Settlement</title>
+  <title>TripSplit – Trip Expense Sharing</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="app-wrapper">
-    <!-- Header -->
+
+    <!-- ==================== HEADER ==================== -->
     <header class="app-header">
       <div class="header-brand">
         <div class="brand-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
           </svg>
         </div>
         <div>
           <h1>TripSplit</h1>
-          <p class="tagline">Smart Trip Expense Sharing & Automatic Settlement</p>
+          <p class="tagline">Track who paid, who owes, auto-settle.</p>
         </div>
       </div>
-      <div class="header-actions">
-        <button class="btn btn-secondary btn-sm" id="btnResetDemo" title="Reset sample trip data">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-          Reset Demo Data
-        </button>
-        <button class="btn btn-primary btn-sm" id="btnOpenAddPerson">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          + Add Person
-        </button>
-      </div>
+      <button class="btn btn-primary" id="btnOpenAddPerson">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Person
+      </button>
     </header>
 
-    <!-- TOP SECTION: Metrics & Add Person Bar -->
-    <section class="top-section">
-      <div class="metrics-grid">
-        <!-- Metric 1: Total Trip Spending -->
-        <div class="metric-card">
-          <div class="metric-icon-wrap bg-blue-subtle">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v12M15 9.5H10a2.5 2.5 0 0 0 0 5h4a2.5 2.5 0 0 1 0 5H9"></path></svg>
-          </div>
-          <div class="metric-content">
-            <span class="metric-label">Total Trip Spending</span>
-            <div class="metric-value" id="displayTotalSpending">₹0</div>
-            <span class="metric-meta" id="displayTotalExpensesCount">0 expenses recorded</span>
-          </div>
+    <!-- ==================== TOP METRICS ==================== -->
+    <section class="top-metrics">
+      <div class="metric-card">
+        <span class="metric-label">Total Trip Spending</span>
+        <span class="metric-value" id="displayTotalSpending">₹0</span>
+        <span class="metric-sub" id="displayExpensesCount">0 expenses</span>
+      </div>
+      <div class="metric-card metric-card--highlight">
+        <div class="metric-label-row">
+          <span class="metric-label">Average Per Person</span>
+          <button class="edit-avg-btn" id="btnToggleCustomAvg" title="Set custom target">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Edit
+          </button>
         </div>
-
-        <!-- Metric 2: Average Per Person (Calculated & Editable) -->
-        <div class="metric-card highlight-metric">
-          <div class="metric-icon-wrap bg-emerald-subtle">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-          </div>
-          <div class="metric-content">
-            <div class="metric-label-row">
-              <span class="metric-label">Average Spent Per Person</span>
-              <button class="btn-icon-link" id="btnToggleCustomAvg" title="Change expected average manually">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                <span>Edit Target</span>
-              </button>
-            </div>
-            <div class="metric-value font-emerald" id="displayAveragePerPerson">₹0 <span class="unit">/ person</span></div>
-            <div class="metric-meta" id="averageFormulaDetail">Total Trip Spending ÷ Number of People</div>
-            <!-- Optional custom target edit row -->
-            <div class="custom-avg-input-row" id="customAvgRow" style="display: none;">
-              <input type="number" id="customAvgInput" placeholder="Custom target average (₹)" class="form-input form-input-sm" />
-              <button class="btn btn-primary btn-xs" id="btnSaveCustomAvg">Apply</button>
-              <button class="btn btn-ghost btn-xs" id="btnResetCustomAvg">Auto</button>
-            </div>
-          </div>
+        <span class="metric-value metric-value--green" id="displayAvgPerPerson">₹0 <span class="per-person">/ person</span></span>
+        <span class="metric-sub" id="avgFormula">Total ÷ People</span>
+        <div class="custom-avg-row" id="customAvgRow">
+          <input type="number" id="customAvgInput" class="form-input form-input-sm" placeholder="Custom target (₹)" />
+          <button class="btn btn-primary btn-xs" id="btnSaveAvg">Apply</button>
+          <button class="btn btn-ghost btn-xs" id="btnResetAvg">Auto</button>
         </div>
-
-        <!-- Metric 3: Total People -->
-        <div class="metric-card">
-          <div class="metric-icon-wrap bg-purple-subtle">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
-          </div>
-          <div class="metric-content">
-            <span class="metric-label">Active Trip Members</span>
-            <div class="metric-value" id="displayPeopleCount">0</div>
-            <div class="people-pills" id="peopleQuickPills"></div>
-          </div>
-        </div>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Trip Members</span>
+        <span class="metric-value" id="displayPeopleCount">0</span>
+        <div class="member-pills" id="memberPills"></div>
       </div>
     </section>
 
-    <!-- MAIN DASHBOARD: Two Sections Side-by-Side -->
-    <main class="dashboard-grid">
-      
-      <!-- ================= LEFT COLUMN: BORROW AMOUNT ================= -->
-      <section class="dashboard-col col-borrow">
-        <div class="panel-card">
-          <div class="panel-header">
+    <!-- ==================== MAIN DASHBOARD ==================== -->
+    <main class="dashboard">
+
+      <!-- LEFT: BORROW AMOUNT -->
+      <section class="col-left">
+        <div class="panel">
+          <div class="panel-head">
             <div>
-              <span class="panel-badge">Step 1 • Enter Payment</span>
+              <div class="panel-tag">Enter Payment</div>
               <h2 class="panel-title">Borrow Amount</h2>
             </div>
-            <span class="badge-fresh" title="Resets after every submission">Auto-Resets</span>
+            <span class="auto-reset-badge">Auto-Resets ↺</span>
           </div>
-          <p class="panel-desc">Record who paid upfront for which trip members. Form clears completely after saving.</p>
+          <p class="panel-desc">Select who paid, how much, and who it was for. Form resets completely after adding.</p>
 
-          <form id="borrowForm" class="expense-form" novalidate>
-            
-            <!-- 3. Spent By -->
+          <form id="borrowForm" novalidate>
+
+            <!-- SPENT BY -->
             <div class="form-group">
-              <label class="form-label required">
-                <span>Who spent?</span>
-                <span class="label-hint">Select the 1 person who paid</span>
-              </label>
-              <div class="spender-selector" id="spenderSelector">
-                <!-- Injected via JavaScript -->
+              <label class="form-label required">Who paid?</label>
+              <div class="spender-grid" id="spenderGrid">
+                <div class="empty-hint">Add people first using the "Add Person" button above.</div>
               </div>
-              <div class="field-error" id="spenderError">Please select who paid for this expense.</div>
+              <div class="field-err" id="spenderErr">Please select who paid.</div>
             </div>
 
-            <!-- 4. Amount -->
+            <!-- AMOUNT -->
             <div class="form-group">
-              <label class="form-label required" for="expenseAmount">
-                <span>Amount</span>
-                <span class="label-hint">Total amount actually paid</span>
-              </label>
-              <div class="input-currency-wrapper">
-                <span class="currency-symbol">₹</span>
-                <input 
-                  type="number" 
-                  id="expenseAmount" 
-                  class="form-input form-input-lg" 
-                  placeholder="0.00" 
-                  step="any" 
-                  min="1" 
-                  required 
-                />
+              <label class="form-label required" for="inpAmount">Amount Paid</label>
+              <div class="currency-wrap">
+                <span class="currency-sym">₹</span>
+                <input type="number" id="inpAmount" class="form-input form-input-lg" placeholder="0" step="any" min="1" />
               </div>
-              <div class="field-error" id="amountError">Please enter a valid amount greater than 0.</div>
+              <div class="field-err" id="amountErr">Enter a valid amount greater than 0.</div>
             </div>
 
-            <!-- 5 & 6. Spent For (Checkbox List + Everyone option) -->
+            <!-- SPENT FOR -->
             <div class="form-group">
               <div class="form-label-row">
-                <label class="form-label required">
-                  <span>Spent For</span>
-                  <span class="label-hint">Who benefited from this spending?</span>
-                </label>
-                <span class="selection-counter" id="selectionCounter">0 people selected</span>
+                <label class="form-label required">Spent for</label>
+                <span class="counter-badge" id="spentForCounter">0 selected</span>
               </div>
-
-              <div class="spent-for-box">
-                <!-- 'Everyone' option toggle -->
-                <label class="checkbox-item checkbox-everyone" id="everyoneCheckboxLabel">
+              <div class="checkbox-box">
+                <label class="chk-item chk-everyone">
                   <input type="checkbox" id="chkEveryone" />
-                  <span class="custom-checkbox"></span>
-                  <span class="checkbox-text font-semibold">Everyone in the trip</span>
+                  <span class="chk-box"></span>
+                  <span class="chk-label">Everyone in the trip</span>
                 </label>
-                <div class="checkbox-divider"></div>
-                <!-- List of individual checkboxes -->
-                <div class="individual-checkboxes" id="individualCheckboxes">
-                  <!-- Injected via JavaScript -->
+                <div class="chk-divider"></div>
+                <div class="individual-chks" id="individualChks">
+                  <div class="empty-hint">Add people to see them here.</div>
                 </div>
               </div>
-              <div class="field-error" id="spentForError">Select at least one person this expense was for.</div>
+              <div class="field-err" id="spentForErr">Select at least one person.</div>
             </div>
 
-            <!-- 7. Description & Quick Tags -->
+            <!-- DESCRIPTION -->
             <div class="form-group">
-              <label class="form-label" for="expenseDescription">
-                <span>Description</span>
-                <span class="label-hint">Optional category or notes</span>
-              </label>
-              <div class="quick-tags" id="quickTags">
-                <button type="button" class="tag-chip" data-tag="Dinner">Dinner</button>
-                <button type="button" class="tag-chip" data-tag="Hotel">Hotel</button>
-                <button type="button" class="tag-chip" data-tag="Petrol">Petrol</button>
-                <button type="button" class="tag-chip" data-tag="Movie">Movie</button>
-                <button type="button" class="tag-chip" data-tag="Tickets">Tickets</button>
-                <button type="button" class="tag-chip" data-tag="Food">Food</button>
-                <button type="button" class="tag-chip" data-tag="Cab">Cab</button>
-                <button type="button" class="tag-chip" data-tag="Shopping">Shopping</button>
+              <label class="form-label" for="inpDesc">Description <span class="opt">(optional)</span></label>
+              <div class="quick-chips" id="quickChips">
+                <button type="button" class="chip" data-tag="Dinner">Dinner</button>
+                <button type="button" class="chip" data-tag="Hotel">Hotel</button>
+                <button type="button" class="chip" data-tag="Petrol">Petrol</button>
+                <button type="button" class="chip" data-tag="Movie">Movie</button>
+                <button type="button" class="chip" data-tag="Tickets">Tickets</button>
+                <button type="button" class="chip" data-tag="Food">Food</button>
+                <button type="button" class="chip" data-tag="Cab">Cab</button>
+                <button type="button" class="chip" data-tag="Shopping">Shopping</button>
               </div>
-              <input 
-                type="text" 
-                id="expenseDescription" 
-                class="form-input" 
-                placeholder="e.g. Dinner, Hotel, Petrol, Movie, Tickets..." 
-                maxlength="80" 
-              />
+              <input type="text" id="inpDesc" class="form-input" placeholder="e.g. Dinner, Hotel, Petrol..." maxlength="80" />
             </div>
 
-            <!-- Date (defaults to today) -->
-            <div class="form-group form-group-inline">
-              <label class="form-label" for="expenseDate">Expense Date</label>
-              <input type="date" id="expenseDate" class="form-input form-input-sm" />
+            <!-- DATE -->
+            <div class="form-group form-group-row">
+              <label class="form-label" for="inpDate">Date</label>
+              <input type="date" id="inpDate" class="form-input form-input-sm" style="width:auto;" />
             </div>
 
-            <!-- 8. Add Expense Button -->
-            <div class="form-actions">
-              <button type="submit" class="btn btn-primary btn-block btn-lg" id="btnAddExpense">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                + Add Expense
-              </button>
-            </div>
+            <!-- SUBMIT -->
+            <button type="submit" class="btn btn-primary btn-block btn-lg">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              + Add Expense
+            </button>
           </form>
         </div>
-
-        <!-- 15. EXPENSE HISTORY (Recent Expenses) -->
-        <div class="panel-card mt-6">
-          <div class="panel-header">
-            <div>
-              <h3 class="panel-title-sm">Recent Expenses</h3>
-              <p class="panel-desc">All recorded payments with edit & delete controls</p>
-            </div>
-            <span class="badge-count" id="historyCountBadge">0</span>
-          </div>
-
-          <div class="expense-history-list" id="expenseHistoryList">
-            <!-- Populated via JavaScript -->
-          </div>
-        </div>
       </section>
 
-      <!-- ================= RIGHT COLUMN: SPEND AMOUNT ================= -->
-      <section class="dashboard-col col-spend">
-        <div class="panel-card">
-          <div class="panel-header">
+      <!-- RIGHT: SPEND AMOUNT -->
+      <section class="col-right">
+        <div class="panel">
+          <div class="panel-head">
             <div>
-              <span class="panel-badge panel-badge-emerald">Step 2 • Real-Time Split</span>
+              <div class="panel-tag panel-tag--green">Live Split</div>
               <h2 class="panel-title">Spend Amount</h2>
             </div>
-            <span class="badge-live"><span class="pulse-dot"></span> Live Calculated</span>
+            <span class="live-badge"><span class="pulse"></span> Auto-updated</span>
           </div>
-          <p class="panel-desc">Automatic share breakdown per person. Click any card to inspect their individual ledger.</p>
+          <p class="panel-desc">What was spent for each person across all expenses. Click a card to see full breakdown.</p>
 
-          <!-- 10. Cards for every person -->
-          <div class="person-cards-grid" id="personCardsGrid">
-            <!-- Injected via JavaScript -->
-          </div>
-        </div>
-
-        <!-- 12 & 13. DIRECT PAYMENT DIRECTIONS (Who Gives & Who Receives) -->
-        <div class="panel-card mt-6">
-          <div class="panel-header">
-            <h3 class="panel-title-sm">Direct Payment Directions</h3>
-            <span class="badge-subtle">Pairwise Balances</span>
-          </div>
-          <div class="directions-grid">
-            <div class="direction-column">
-              <div class="direction-header to-give-header">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 8 8 12 12 16"></polyline><line x1="16" y1="12" x2="8" y2="12"></line></svg>
-                <span>Amount To Give</span>
-              </div>
-              <div class="direction-list" id="giveList">
-                <!-- Injected via JavaScript -->
-              </div>
-            </div>
-
-            <div class="direction-column">
-              <div class="direction-header to-receive-header">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 16 16 12 12 8"></polyline><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-                <span>Amount To Receive</span>
-              </div>
-              <div class="direction-list" id="receiveList">
-                <!-- Injected via JavaScript -->
-              </div>
+          <div class="person-cards" id="personCards">
+            <div class="empty-state">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:#94a3b8; margin-bottom:12px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <p>Add people and record expenses to see the split breakdown here.</p>
             </div>
           </div>
         </div>
 
-        <!-- 14. FINAL SETTLEMENT -->
-        <div class="panel-card panel-settlement mt-6">
-          <div class="panel-header">
-            <div class="settle-title-wrap">
+        <!-- FINAL SETTLEMENT -->
+        <div class="panel panel--dark">
+          <div class="panel-head">
+            <div style="display:flex;align-items:center;gap:12px">
               <div class="settle-icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
               </div>
               <div>
-                <h3 class="panel-title-sm text-white">Final Settlement</h3>
-                <p class="panel-desc text-white-70">Minimum required transactions to settle all debts</p>
+                <h3 class="panel-title panel-title--white">Final Settlement</h3>
+                <p class="panel-desc panel-desc--white">Person on the left pays Person on the right</p>
               </div>
             </div>
-            <span class="badge-settle-rule">Person on left pays Person on right</span>
           </div>
-
-          <div class="settlement-container" id="finalSettlementList">
-            <!-- Injected via JavaScript -->
+          <div class="settlement-list" id="settlementList">
+            <div class="settle-empty">All settled up once you add expenses.</div>
           </div>
         </div>
       </section>
-
     </main>
 
-    <!-- Footer -->
+    <!-- FOOTER -->
     <footer class="app-footer">
-      <div class="footer-left">
-        <span>TripSplit • Effortless Trip Expense Sharing</span>
-        <span class="bullet">•</span>
-        <span class="text-muted">Data saved locally in browser</span>
-      </div>
-      <div class="footer-right">
-        <button class="btn-link" id="btnExportData">Export Data</button>
-        <button class="btn-link" id="btnClearAll">Clear Trip</button>
+      <span>TripSplit • Data saved in your browser</span>
+      <div>
+        <button class="btn-link" id="btnExport">Export JSON</button>
+        <button class="btn-link btn-link--red" id="btnClearAll">Clear Trip</button>
       </div>
     </footer>
   </div>
 
   <!-- MODAL: ADD PERSON -->
-  <div class="modal-backdrop" id="modalAddPerson" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <h3>+ Add Person to Trip</h3>
-        <button class="modal-close" data-close="modalAddPerson">&times;</button>
+  <div class="modal-bg" id="modalAddPerson">
+    <div class="modal">
+      <div class="modal-hd">
+        <h3>Add Person to Trip</h3>
+        <button class="modal-x" data-close="modalAddPerson">✕</button>
       </div>
       <form id="formAddPerson">
-        <div class="modal-body">
+        <div class="modal-bd">
           <div class="form-group">
-            <label class="form-label" for="newPersonName">Person's Name</label>
-            <input 
-              type="text" 
-              id="newPersonName" 
-              class="form-input form-input-lg" 
-              placeholder="e.g. Rahul, Amit, Priya, Arjun..." 
-              required 
-              autofocus 
-            />
-            <div class="field-error" id="personNameError">Please enter a valid, unique name.</div>
+            <label class="form-label" for="inpPersonName">Name</label>
+            <input type="text" id="inpPersonName" class="form-input form-input-lg" placeholder="e.g. Rahul, Amit, Priya..." required />
+            <div class="field-err" id="personNameErr">Enter a valid, unique name.</div>
           </div>
-          <div class="existing-people-hint">
-            <span class="text-muted">Current members:</span>
-            <span id="currentMembersPillList"></span>
-          </div>
+          <div class="existing-members" id="existingMembers"></div>
         </div>
-        <div class="modal-footer">
+        <div class="modal-ft">
           <button type="button" class="btn btn-secondary" data-close="modalAddPerson">Cancel</button>
           <button type="submit" class="btn btn-primary">Add Member</button>
         </div>
@@ -340,116 +222,96 @@
     </div>
   </div>
 
-  <!-- MODAL: PERSON DETAILS (Section 11) -->
-  <div class="modal-backdrop" id="modalPersonDetails" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-lg">
-      <div class="modal-header">
-        <div class="modal-person-header">
-          <div class="person-avatar-lg" id="detailPersonAvatar">R</div>
+  <!-- MODAL: PERSON DETAILS -->
+  <div class="modal-bg" id="modalPersonDetail">
+    <div class="modal modal-lg">
+      <div class="modal-hd">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="avatar avatar-lg" id="detailAvatar">R</div>
           <div>
-            <h3 id="detailPersonName">Rahul</h3>
-            <span class="badge-role" id="detailPersonStatus">Settlement Details</span>
+            <h3 id="detailName">Rahul</h3>
+            <span class="detail-status" id="detailStatus"></span>
           </div>
         </div>
-        <button class="modal-close" data-close="modalPersonDetails">&times;</button>
+        <button class="modal-x" data-close="modalPersonDetail">✕</button>
       </div>
-      <div class="modal-body">
-        <!-- 4 Key stats -->
-        <div class="person-stat-grid">
-          <div class="stat-box">
-            <span class="stat-title">Total Paid</span>
-            <span class="stat-number font-blue" id="detailTotalPaid">₹0</span>
+      <div class="modal-bd">
+        <!-- Summary stats -->
+        <div class="detail-stats">
+          <div class="dstat">
+            <span class="dstat-label">Total Paid (by them)</span>
+            <span class="dstat-val" id="dTotalPaid">₹0</span>
           </div>
-          <div class="stat-box">
-            <span class="stat-title">Personal Share</span>
-            <span class="stat-number" id="detailPersonalShare">₹0</span>
+          <div class="dstat">
+            <span class="dstat-label">Total Share (owed)</span>
+            <span class="dstat-val" id="dTotalShare">₹0</span>
           </div>
-          <div class="stat-box">
-            <span class="stat-title">Paid For Others</span>
-            <span class="stat-number font-emerald" id="detailPaidForOthers">₹0</span>
-          </div>
-          <div class="stat-box">
-            <span class="stat-title">Others Paid For</span>
-            <span class="stat-number font-rose" id="detailOthersPaidFor">₹0</span>
+          <div class="dstat">
+            <span class="dstat-label">Balance</span>
+            <span class="dstat-val" id="dBalance">₹0</span>
           </div>
         </div>
 
-        <!-- Final Balance Banner -->
-        <div class="person-balance-banner" id="detailBalanceBanner">
-          <span class="banner-label">Final Balance:</span>
-          <span class="banner-value" id="detailFinalBalance">₹0</span>
+        <!-- Balance banner -->
+        <div class="balance-banner" id="dBalanceBanner">
+          <span id="dBalanceLabel"></span>
+          <span id="dBalanceAmt"></span>
         </div>
 
-        <!-- Person's Specific Expenses Table -->
-        <div class="mt-6">
-          <h4 class="section-subheading" id="detailTableTitle">Expenses Paid by Member</h4>
-          <div class="table-responsive">
-            <table class="detail-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th class="text-right">Amount</th>
-                  <th>Spent For</th>
-                  <th>Description</th>
-                </tr>
-              </thead>
-              <tbody id="detailExpensesTableBody">
-                <!-- Injected via JavaScript -->
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <!-- Expenses breakdown for this person -->
+        <h4 class="section-heading" id="dExpTitle">Expenses paid for this person</h4>
+        <div class="breakdown-list" id="dBreakdownList"></div>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-close="modalPersonDetails">Close</button>
+      <div class="modal-ft">
+        <button type="button" class="btn btn-secondary" data-close="modalPersonDetail">Close</button>
       </div>
     </div>
   </div>
 
   <!-- MODAL: EDIT EXPENSE -->
-  <div class="modal-backdrop" id="modalEditExpense" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-header">
+  <div class="modal-bg" id="modalEdit">
+    <div class="modal">
+      <div class="modal-hd">
         <h3>Edit Expense</h3>
-        <button class="modal-close" data-close="modalEditExpense">&times;</button>
+        <button class="modal-x" data-close="modalEdit">✕</button>
       </div>
-      <form id="formEditExpense">
-        <input type="hidden" id="editExpenseId" />
-        <div class="modal-body">
+      <form id="formEdit">
+        <input type="hidden" id="editId" />
+        <div class="modal-bd">
           <div class="form-group">
-            <label class="form-label">Spent By</label>
-            <div class="spender-selector" id="editSpenderSelector"></div>
+            <label class="form-label">Who paid?</label>
+            <div class="spender-grid" id="editSpenderGrid"></div>
           </div>
           <div class="form-group">
-            <label class="form-label" for="editExpenseAmount">Amount (₹)</label>
-            <input type="number" id="editExpenseAmount" class="form-input" min="1" step="any" required />
+            <label class="form-label" for="editAmt">Amount (₹)</label>
+            <input type="number" id="editAmt" class="form-input" min="1" step="any" required />
           </div>
           <div class="form-group">
             <div class="form-label-row">
-              <label class="form-label">Spent For</label>
-              <span class="selection-counter" id="editSelectionCounter">0 selected</span>
+              <label class="form-label">Spent for</label>
+              <span class="counter-badge" id="editCounter">0 selected</span>
             </div>
-            <div class="spent-for-box">
-              <label class="checkbox-item checkbox-everyone">
-                <input type="checkbox" id="editChkEveryone" />
-                <span class="custom-checkbox"></span>
-                <span class="checkbox-text font-semibold">Everyone</span>
+            <div class="checkbox-box">
+              <label class="chk-item chk-everyone">
+                <input type="checkbox" id="editChkAll" />
+                <span class="chk-box"></span>
+                <span class="chk-label">Everyone</span>
               </label>
-              <div class="checkbox-divider"></div>
-              <div class="individual-checkboxes" id="editIndividualCheckboxes"></div>
+              <div class="chk-divider"></div>
+              <div class="individual-chks" id="editIndChks"></div>
             </div>
           </div>
           <div class="form-group">
-            <label class="form-label" for="editExpenseDescription">Description</label>
-            <input type="text" id="editExpenseDescription" class="form-input" />
+            <label class="form-label" for="editDesc">Description</label>
+            <input type="text" id="editDesc" class="form-input" />
           </div>
           <div class="form-group">
-            <label class="form-label" for="editExpenseDate">Date</label>
-            <input type="date" id="editExpenseDate" class="form-input" />
+            <label class="form-label" for="editDate">Date</label>
+            <input type="date" id="editDate" class="form-input" />
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-close="modalEditExpense">Cancel</button>
+        <div class="modal-ft">
+          <button type="button" class="btn btn-secondary" data-close="modalEdit">Cancel</button>
           <button type="submit" class="btn btn-primary">Save Changes</button>
         </div>
       </form>

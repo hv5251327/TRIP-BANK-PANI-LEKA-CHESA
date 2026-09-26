@@ -1,1151 +1,747 @@
 /**
- * TripSplit - Trip Expense Sharing & Settlement Engine
- * Pure Vanilla JavaScript ES6+ with LocalStorage Persistence
+ * TripSplit – Vanilla JS Engine (Clean, Optimized)
+ * - No default data (starts empty)
+ * - No Recent Expenses section
+ * - No pairwise Give/Receive section
+ * - Spend Amount = shows what was spent FOR each person with who paid below each entry
+ * - Form fully resets after every submission (no persistent spender)
  */
-
 (function () {
   'use strict';
 
-  // ================= STORAGE KEYS & INITIAL STATE =================
-  const STORAGE_KEY_PEOPLE = 'tripsplit_people_v1';
-  const STORAGE_KEY_EXPENSES = 'tripsplit_expenses_v1';
-  const STORAGE_KEY_CUSTOM_AVG = 'tripsplit_custom_avg_v1';
+  // ─── STORAGE KEYS ────────────────────────────────────────────────────────────
+  const SK_PEOPLE   = 'ts_people_v2';
+  const SK_EXPENSES = 'ts_expenses_v2';
+  const SK_AVGOVER  = 'ts_avgover_v2';
 
-  // Default demo data as per prompt specifications
-  const DEFAULT_PEOPLE = ['Rahul', 'Amit', 'Priya', 'Arjun'];
-  
-  const DEFAULT_EXPENSES = [
-    {
-      id: 'exp-demo-1',
-      spentBy: 'Rahul',
-      amount: 1000,
-      spentFor: ['Rahul', 'Amit', 'Priya'],
-      description: 'Dinner',
-      date: new Date().toISOString().split('T')[0],
-      createdAt: Date.now() - 3600000
-    }
-  ];
-
-  // App State
-  let people = [];
+  // ─── STATE ───────────────────────────────────────────────────────────────────
+  let people   = [];
   let expenses = [];
-  let customAverageOverride = null;
+  let customAvg = null;  // null = auto-calculated
 
-  // DOM Elements
-  const displayTotalSpending = document.getElementById('displayTotalSpending');
-  const displayAveragePerPerson = document.getElementById('displayAveragePerPerson');
-  const averageFormulaDetail = document.getElementById('averageFormulaDetail');
-  const displayPeopleCount = document.getElementById('displayPeopleCount');
-  const displayTotalExpensesCount = document.getElementById('displayTotalExpensesCount');
-  const peopleQuickPills = document.getElementById('peopleQuickPills');
+  // ─── DOM REFS ────────────────────────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
 
-  // Custom Average Elements
-  const btnToggleCustomAvg = document.getElementById('btnToggleCustomAvg');
-  const customAvgRow = document.getElementById('customAvgRow');
-  const customAvgInput = document.getElementById('customAvgInput');
-  const btnSaveCustomAvg = document.getElementById('btnSaveCustomAvg');
-  const btnResetCustomAvg = document.getElementById('btnResetCustomAvg');
+  // Top metrics
+  const elTotalSpending   = $('displayTotalSpending');
+  const elExpCount        = $('displayExpensesCount');
+  const elAvgPerPerson    = $('displayAvgPerPerson');
+  const elAvgFormula      = $('avgFormula');
+  const elPeopleCount     = $('displayPeopleCount');
+  const elMemberPills     = $('memberPills');
 
-  // Borrow Form Elements
-  const borrowForm = document.getElementById('borrowForm');
-  const spenderSelector = document.getElementById('spenderSelector');
-  const expenseAmountInput = document.getElementById('expenseAmount');
-  const chkEveryone = document.getElementById('chkEveryone');
-  const individualCheckboxes = document.getElementById('individualCheckboxes');
-  const selectionCounter = document.getElementById('selectionCounter');
-  const expenseDescriptionInput = document.getElementById('expenseDescription');
-  const expenseDateInput = document.getElementById('expenseDate');
-  const quickTags = document.getElementById('quickTags');
-  const spenderError = document.getElementById('spenderError');
-  const amountError = document.getElementById('amountError');
-  const spentForError = document.getElementById('spentForError');
+  // Custom avg controls
+  const btnToggleAvg  = $('btnToggleCustomAvg');
+  const customAvgRow  = $('customAvgRow');
+  const customAvgInp  = $('customAvgInput');
+  const btnSaveAvg    = $('btnSaveAvg');
+  const btnResetAvg   = $('btnResetAvg');
 
-  // Spend Amount & Settlement Elements
-  const personCardsGrid = document.getElementById('personCardsGrid');
-  const giveList = document.getElementById('giveList');
-  const receiveList = document.getElementById('receiveList');
-  const finalSettlementList = document.getElementById('finalSettlementList');
-  const expenseHistoryList = document.getElementById('expenseHistoryList');
-  const historyCountBadge = document.getElementById('historyCountBadge');
+  // Borrow form
+  const borrowForm        = $('borrowForm');
+  const spenderGrid       = $('spenderGrid');
+  const inpAmount         = $('inpAmount');
+  const chkEveryone       = $('chkEveryone');
+  const individualChks    = $('individualChks');
+  const spentForCounter   = $('spentForCounter');
+  const inpDesc           = $('inpDesc');
+  const inpDate           = $('inpDate');
+  const quickChips        = $('quickChips');
+  const spenderErr        = $('spenderErr');
+  const amountErr         = $('amountErr');
+  const spentForErr       = $('spentForErr');
 
-  // Modals & Controls
-  const btnOpenAddPerson = document.getElementById('btnOpenAddPerson');
-  const modalAddPerson = document.getElementById('modalAddPerson');
-  const formAddPerson = document.getElementById('formAddPerson');
-  const newPersonNameInput = document.getElementById('newPersonName');
-  const personNameError = document.getElementById('personNameError');
-  const currentMembersPillList = document.getElementById('currentMembersPillList');
+  // Spend Amount
+  const personCards       = $('personCards');
 
-  const modalPersonDetails = document.getElementById('modalPersonDetails');
-  const detailPersonAvatar = document.getElementById('detailPersonAvatar');
-  const detailPersonName = document.getElementById('detailPersonName');
-  const detailTotalPaid = document.getElementById('detailTotalPaid');
-  const detailPersonalShare = document.getElementById('detailPersonalShare');
-  const detailPaidForOthers = document.getElementById('detailPaidForOthers');
-  const detailOthersPaidFor = document.getElementById('detailOthersPaidFor');
-  const detailFinalBalance = document.getElementById('detailFinalBalance');
-  const detailBalanceBanner = document.getElementById('detailBalanceBanner');
-  const detailExpensesTableBody = document.getElementById('detailExpensesTableBody');
-  const detailTableTitle = document.getElementById('detailTableTitle');
+  // Final Settlement
+  const settlementList    = $('settlementList');
 
-  const modalEditExpense = document.getElementById('modalEditExpense');
-  const formEditExpense = document.getElementById('formEditExpense');
-  const editExpenseId = document.getElementById('editExpenseId');
-  const editSpenderSelector = document.getElementById('editSpenderSelector');
-  const editExpenseAmount = document.getElementById('editExpenseAmount');
-  const editChkEveryone = document.getElementById('editChkEveryone');
-  const editIndividualCheckboxes = document.getElementById('editIndividualCheckboxes');
-  const editSelectionCounter = document.getElementById('editSelectionCounter');
-  const editExpenseDescription = document.getElementById('editExpenseDescription');
-  const editExpenseDate = document.getElementById('editExpenseDate');
+  // Add Person modal
+  const btnOpenAddPerson  = $('btnOpenAddPerson');
+  const modalAddPerson    = $('modalAddPerson');
+  const formAddPerson     = $('formAddPerson');
+  const inpPersonName     = $('inpPersonName');
+  const personNameErr     = $('personNameErr');
+  const existingMembers   = $('existingMembers');
 
-  const btnResetDemo = document.getElementById('btnResetDemo');
-  const btnClearAll = document.getElementById('btnClearAll');
-  const btnExportData = document.getElementById('btnExportData');
+  // Person Detail modal
+  const modalPersonDetail = $('modalPersonDetail');
+  const detailAvatar      = $('detailAvatar');
+  const detailName        = $('detailName');
+  const detailStatus      = $('detailStatus');
+  const dTotalPaid        = $('dTotalPaid');
+  const dTotalShare       = $('dTotalShare');
+  const dBalance          = $('dBalance');
+  const dBalanceBanner    = $('dBalanceBanner');
+  const dBalanceLabel     = $('dBalanceLabel');
+  const dBalanceAmt       = $('dBalanceAmt');
+  const dExpTitle         = $('dExpTitle');
+  const dBreakdownList    = $('dBreakdownList');
 
-  // ================= UTILITY HELPERS =================
-  function formatINR(number) {
-    const val = Number(number) || 0;
-    // Format to Indian Rupee with standard 2 decimal places when needed
-    return '₹' + val.toLocaleString('en-IN', {
-      minimumFractionDigits: Number.isInteger(val) ? 0 : 2,
+  // Edit modal
+  const modalEdit         = $('modalEdit');
+  const formEdit          = $('formEdit');
+  const editId            = $('editId');
+  const editSpenderGrid   = $('editSpenderGrid');
+  const editAmt           = $('editAmt');
+  const editChkAll        = $('editChkAll');
+  const editIndChks       = $('editIndChks');
+  const editCounter       = $('editCounter');
+  const editDesc          = $('editDesc');
+  const editDate          = $('editDate');
+
+  // Footer
+  const btnExport         = $('btnExport');
+  const btnClearAll       = $('btnClearAll');
+
+  // ─── UTILS ───────────────────────────────────────────────────────────────────
+  const fmtINR = v => {
+    const n = Number(v) || 0;
+    return '₹' + n.toLocaleString('en-IN', {
+      minimumFractionDigits: Number.isInteger(n) ? 0 : 2,
       maximumFractionDigits: 2
     });
-  }
+  };
 
-  function getInitials(name) {
-    if (!name) return '?';
-    return name.trim().charAt(0).toUpperCase();
-  }
+  const initials = name => (name || '?').trim()[0].toUpperCase();
+  const genId    = () => 'exp_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+  const today    = () => new Date().toISOString().split('T')[0];
+  const fmtDate  = s => {
+    if (!s) return '';
+    const [y,m,d] = s.split('-');
+    return new Date(y, m-1, d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  };
 
-  function generateId() {
-    return 'exp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-  }
-
-  function formatDateFriendly(dateStr) {
-    if (!dateStr) return '';
+  // ─── PERSISTENCE ─────────────────────────────────────────────────────────────
+  function load() {
     try {
-      const parts = dateStr.split('-');
-      if (parts.length === 3) {
-        const d = new Date(parts[0], parts[1] - 1, parts[2]);
-        return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-      }
-    } catch (e) {
-      // fallback
-    }
-    return dateStr;
-  }
-
-  // ================= STORAGE MANAGEMENT =================
-  function loadState() {
-    try {
-      const storedPeople = localStorage.getItem(STORAGE_KEY_PEOPLE);
-      const storedExpenses = localStorage.getItem(STORAGE_KEY_EXPENSES);
-      const storedCustomAvg = localStorage.getItem(STORAGE_KEY_CUSTOM_AVG);
-
-      people = storedPeople ? JSON.parse(storedPeople) : [...DEFAULT_PEOPLE];
-      expenses = storedExpenses ? JSON.parse(storedExpenses) : JSON.parse(JSON.stringify(DEFAULT_EXPENSES));
-      customAverageOverride = storedCustomAvg ? parseFloat(storedCustomAvg) : null;
-    } catch (err) {
-      console.warn('Failed to parse localStorage data, restoring defaults', err);
-      people = [...DEFAULT_PEOPLE];
-      expenses = JSON.parse(JSON.stringify(DEFAULT_EXPENSES));
-      customAverageOverride = null;
+      people   = JSON.parse(localStorage.getItem(SK_PEOPLE))   || [];
+      expenses = JSON.parse(localStorage.getItem(SK_EXPENSES)) || [];
+      const ca = localStorage.getItem(SK_AVGOVER);
+      customAvg = ca !== null ? parseFloat(ca) : null;
+    } catch {
+      people = []; expenses = []; customAvg = null;
     }
   }
 
-  function saveState() {
-    localStorage.setItem(STORAGE_KEY_PEOPLE, JSON.stringify(people));
-    localStorage.setItem(STORAGE_KEY_EXPENSES, JSON.stringify(expenses));
-    if (customAverageOverride !== null) {
-      localStorage.setItem(STORAGE_KEY_CUSTOM_AVG, customAverageOverride.toString());
-    } else {
-      localStorage.removeItem(STORAGE_KEY_CUSTOM_AVG);
-    }
+  function save() {
+    localStorage.setItem(SK_PEOPLE,   JSON.stringify(people));
+    localStorage.setItem(SK_EXPENSES, JSON.stringify(expenses));
+    if (customAvg !== null) localStorage.setItem(SK_AVGOVER, customAvg);
+    else localStorage.removeItem(SK_AVGOVER);
   }
 
-  // ================= CORE EXPENSE & DEBT CALCULATION LOGIC =================
+  // ─── CALCULATIONS ────────────────────────────────────────────────────────────
   /**
-   * Calculates all metrics per person:
-   * 1. Total Paid: sum of all expenses where person was the payer
-   * 2. Personal Share: sum of (expense.amount / expense.spentFor.length) for each expense where person was in spentFor
-   * 3. Paid For Others: Total Paid - (Share of payer in their own paid expenses)
-   * 4. Others Paid For [Person]: Personal Share - (Share paid by themselves)
-   * 5. Balance = Total Paid - Personal Share
-   *    - Positive: money to receive
-   *    - Negative: money to give
+   * Returns per-person stats and optimal settlement transactions.
+   *
+   * For each person we track:
+   *   totalPaid  - amount paid out by this person (spentBy)
+   *   share      - sum of (exp.amount / exp.spentFor.length) for each expense they're listed in
+   *   balance    = totalPaid - share  (positive = owed money, negative = owes money)
+   *
+   * Also builds a list of expenses-per-beneficiary:
+   *   expensesForPerson[person] = [ { desc, date, share, paidBy }, ... ]
    */
-  function calculateTripStats() {
+  function calculate() {
+    const totalSpend = expenses.reduce((s, e) => s + (Number(e.amount)||0), 0);
+    const n = people.length || 1;
+    const autoAvg = totalSpend / n;
+
+    // Init per-person buckets
     const stats = {};
-    const totalSpending = expenses.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
-    const peopleCount = people.length || 1;
-    const autoAverage = totalSpending / peopleCount;
-
-    // Initialize stats map for all people
+    const forPerson = {};          // expenses FOR each person
     people.forEach(p => {
-      stats[p] = {
-        name: p,
-        totalPaid: 0,
-        personalShare: 0,
-        paidForOthers: 0,
-        othersPaidForMe: 0,
-        balance: 0,
-        expensesPaid: []
-      };
+      stats[p]     = { totalPaid: 0, share: 0 };
+      forPerson[p] = [];
     });
 
-    // Pairwise debt matrix: pairwiseDebts[A][B] = amount A owes B directly
-    const pairwiseDebts = {};
-    people.forEach(p1 => {
-      pairwiseDebts[p1] = {};
-      people.forEach(p2 => {
-        pairwiseDebts[p1][p2] = 0;
-      });
-    });
-
-    // Accumulate each expense
     expenses.forEach(exp => {
-      const payer = exp.spentBy;
+      const payer  = exp.spentBy;
       const amount = Number(exp.amount) || 0;
-      const beneficiaries = exp.spentFor || [];
-      const count = beneficiaries.length;
+      const bens   = Array.isArray(exp.spentFor) ? exp.spentFor : [];
+      const cnt    = bens.length;
+      if (!cnt) return;
 
-      if (!stats[payer]) {
-        // If payer was deleted from people, ensure key exists
-        stats[payer] = {
-          name: payer,
-          totalPaid: 0,
-          personalShare: 0,
-          paidForOthers: 0,
-          othersPaidForMe: 0,
-          balance: 0,
-          expensesPaid: []
-        };
-        pairwiseDebts[payer] = {};
-        people.forEach(p => pairwiseDebts[payer][p] = 0);
-      }
+      const perHead = amount / cnt;
 
-      stats[payer].totalPaid += amount;
-      stats[payer].expensesPaid.push(exp);
+      // Credit payer
+      if (stats[payer]) stats[payer].totalPaid += amount;
 
-      if (count > 0) {
-        const individualShare = amount / count;
-
-        beneficiaries.forEach(beneficiary => {
-          if (!stats[beneficiary]) return;
-          stats[beneficiary].personalShare += individualShare;
-
-          if (beneficiary === payer) {
-            // Payer consumed their own money: neither paid for others nor others paid for them
-          } else {
-            // Beneficiary owes the payer
-            stats[payer].paidForOthers += individualShare;
-            stats[beneficiary].othersPaidForMe += individualShare;
-            if (pairwiseDebts[beneficiary] && pairwiseDebts[beneficiary][payer] !== undefined) {
-              pairwiseDebts[beneficiary][payer] += individualShare;
-            }
-          }
+      // Debit each beneficiary
+      bens.forEach(b => {
+        if (!stats[b]) return;
+        stats[b].share += perHead;
+        forPerson[b].push({
+          id:      exp.id,
+          desc:    exp.description || 'Expense',
+          date:    exp.date,
+          share:   perHead,
+          paidBy:  payer,
+          amount:  amount,
+          spentFor: exp.spentFor
         });
-      }
-    });
-
-    // Compute net balance per person
-    people.forEach(p => {
-      const s = stats[p];
-      if (s) {
-        s.balance = s.totalPaid - s.personalShare;
-      }
-    });
-
-    // Simplify pairwise net debts: netDebt(A, B) = pairwiseDebts[A][B] - pairwiseDebts[B][A]
-    // If netDebt(A, B) > 0, A owes B that amount.
-    const directDebts = [];
-    const processedPairs = new Set();
-
-    people.forEach(p1 => {
-      people.forEach(p2 => {
-        if (p1 === p2) return;
-        const pairKey = [p1, p2].sort().join(':::');
-        if (processedPairs.has(pairKey)) return;
-        processedPairs.add(pairKey);
-
-        const p1OwesP2 = (pairwiseDebts[p1] && pairwiseDebts[p1][p2]) || 0;
-        const p2OwesP1 = (pairwiseDebts[p2] && pairwiseDebts[p2][p1]) || 0;
-        const net = p1OwesP2 - p2OwesP1;
-
-        if (net > 0.009) {
-          directDebts.push({ from: p1, to: p2, amount: net });
-        } else if (net < -0.009) {
-          directDebts.push({ from: p2, to: p1, amount: Math.abs(net) });
-        }
       });
     });
 
-    // Compute optimal simplified settlement transactions using greedy balance matching
-    const settlementTransactions = computeSimplifiedSettlement(stats);
-
-    return {
-      totalSpending,
-      peopleCount,
-      autoAverage,
-      effectiveAverage: customAverageOverride !== null ? customAverageOverride : autoAverage,
-      stats,
-      directDebts,
-      settlementTransactions
-    };
-  }
-
-  /**
-   * Greedy minimum cash flow settlement algorithm.
-   * Matches the largest debtor with the largest creditor until all balances are within 1 cent.
-   */
-  function computeSimplifiedSettlement(stats) {
-    const debtors = [];
-    const creditors = [];
-
+    // Compute balances
     people.forEach(p => {
-      const net = stats[p] ? stats[p].balance : 0;
-      if (net < -0.01) {
-        debtors.push({ name: p, amount: -net });
-      } else if (net > 0.01) {
-        creditors.push({ name: p, amount: net });
-      }
+      if (stats[p]) stats[p].balance = stats[p].totalPaid - stats[p].share;
     });
 
-    // Sort descending
-    debtors.sort((a, b) => b.amount - a.amount);
-    creditors.sort((a, b) => b.amount - a.amount);
+    // Optimal settlement (greedy min-cash-flow)
+    const debtors   = [];
+    const creditors = [];
+    people.forEach(p => {
+      const b = stats[p] ? stats[p].balance : 0;
+      if (b < -0.01) debtors.push({ name: p, amount: -b });
+      else if (b > 0.01) creditors.push({ name: p, amount: b });
+    });
+    debtors.sort((a,b) => b.amount - a.amount);
+    creditors.sort((a,b) => b.amount - a.amount);
 
     const transactions = [];
-    let i = 0;
-    let j = 0;
-
+    let i = 0, j = 0;
     while (i < debtors.length && j < creditors.length) {
-      const debtor = debtors[i];
-      const creditor = creditors[j];
-      const settleAmount = Math.min(debtor.amount, creditor.amount);
-
-      if (settleAmount > 0.009) {
-        transactions.push({
-          from: debtor.name,
-          to: creditor.name,
-          amount: settleAmount
-        });
+      const settle = Math.min(debtors[i].amount, creditors[j].amount);
+      if (settle > 0.009) {
+        transactions.push({ from: debtors[i].name, to: creditors[j].name, amount: settle });
       }
-
-      debtor.amount -= settleAmount;
-      creditor.amount -= settleAmount;
-
-      if (debtor.amount <= 0.01) i++;
-      if (creditor.amount <= 0.01) j++;
+      debtors[i].amount   -= settle;
+      creditors[j].amount -= settle;
+      if (debtors[i].amount   <= 0.01) i++;
+      if (creditors[j].amount <= 0.01) j++;
     }
 
-    return transactions;
+    return { totalSpend, autoAvg, stats, forPerson, transactions };
   }
 
-  // ================= UI RENDERING =================
-
+  // ─── RENDER ALL ──────────────────────────────────────────────────────────────
   function renderAll() {
-    const data = calculateTripStats();
-
-    renderTopSection(data);
-    renderBorrowSpenderOptions();
-    renderBorrowSpentForCheckboxes();
-    renderSpendAmountCards(data);
-    renderDirections(data);
-    renderFinalSettlement(data);
-    renderExpenseHistory();
+    const data = calculate();
+    renderTopMetrics(data);
+    renderSpenderOptions(spenderGrid, getSelectedSpender(spenderGrid), people);
+    renderIndividualCheckboxes();
+    renderPersonCards(data);
+    renderSettlement(data);
   }
 
-  function renderTopSection(data) {
-    displayTotalSpending.textContent = formatINR(data.totalSpending);
-    displayTotalExpensesCount.textContent = `${expenses.length} ${expenses.length === 1 ? 'expense' : 'expenses'} recorded`;
-    
-    displayPeopleCount.textContent = data.peopleCount;
+  // ─── TOP METRICS ─────────────────────────────────────────────────────────────
+  function renderTopMetrics({ totalSpend, autoAvg }) {
+    elTotalSpending.textContent = fmtINR(totalSpend);
+    elExpCount.textContent = `${expenses.length} ${expenses.length === 1 ? 'expense' : 'expenses'}`;
+    elPeopleCount.textContent  = people.length;
 
-    // Average per person
-    displayAveragePerPerson.innerHTML = `${formatINR(data.effectiveAverage)} <span class="unit">/ person</span>`;
-    
-    if (customAverageOverride !== null) {
-      averageFormulaDetail.innerHTML = `<span class="badge-fresh">Custom Target</span> (Actual: ${formatINR(data.autoAverage)})`;
+    const effectiveAvg = customAvg !== null ? customAvg : autoAvg;
+    elAvgPerPerson.innerHTML = `${fmtINR(effectiveAvg)} <span class="per-person">/ person</span>`;
+
+    if (customAvg !== null) {
+      elAvgFormula.innerHTML = `<span style="color:#92400e;font-weight:600">Custom target</span> (Auto: ${fmtINR(autoAvg)})`;
     } else {
-      averageFormulaDetail.textContent = 'Total Trip Spending ÷ Number of People';
+      elAvgFormula.textContent = 'Total ÷ People';
     }
 
-    // Quick member pills
-    peopleQuickPills.innerHTML = people.map(p => `
-      <span class="person-pill">${p}</span>
+    // Member pills
+    elMemberPills.innerHTML = people.map(p => `<span class="pill">${p}</span>`).join('');
+
+    // Existing members hint in modal
+    if (existingMembers) {
+      existingMembers.innerHTML = people.length
+        ? 'Current members: ' + people.map(p => `<span class="pill">${p}</span>`).join('')
+        : '<span style="color:var(--light)">No members yet</span>';
+    }
+  }
+
+  // ─── SPENDER OPTIONS ─────────────────────────────────────────────────────────
+  function renderSpenderOptions(container, currentSelected, list) {
+    if (!list.length) {
+      container.innerHTML = '<div class="empty-hint">Add people first.</div>';
+      return;
+    }
+    container.innerHTML = list.map(p => `
+      <label class="spender-card ${currentSelected === p ? 'selected' : ''}">
+        <input type="radio" name="spentBy_${container.id}" value="${p}" ${currentSelected === p ? 'checked' : ''} />
+        <div class="avatar">${initials(p)}</div>
+        <span class="spender-name">${p}</span>
+        <span class="radio-dot"></span>
+      </label>
     `).join('');
 
-    // Modal current members hint
-    if (currentMembersPillList) {
-      currentMembersPillList.innerHTML = people.map(p => `
-        <span class="person-pill">${p}</span>
-      `).join(' ');
-    }
-  }
-
-  // Render "Spent By" radio buttons/cards
-  function renderBorrowSpenderOptions() {
-    const selectedSpender = getSelectedSpender();
-    
-    if (people.length === 0) {
-      spenderSelector.innerHTML = '<div class="empty-state-sm">No members added yet. Click "+ Add Person" above.</div>';
-      return;
-    }
-
-    spenderSelector.innerHTML = people.map(person => {
-      const isSelected = selectedSpender === person;
-      return `
-        <label class="spender-card ${isSelected ? 'selected' : ''}" data-name="${person}">
-          <input type="radio" name="spentByPerson" value="${person}" ${isSelected ? 'checked' : ''} />
-          <div class="person-avatar">${getInitials(person)}</div>
-          <span class="spender-name">${person}</span>
-          <span class="radio-check-circle"></span>
-        </label>
-      `;
-    }).join('');
-
-    // Add click listeners to spender cards
-    spenderSelector.querySelectorAll('.spender-card').forEach(card => {
+    container.querySelectorAll('.spender-card').forEach(card => {
       card.addEventListener('click', () => {
-        spenderSelector.querySelectorAll('.spender-card').forEach(c => c.classList.remove('selected'));
+        container.querySelectorAll('.spender-card').forEach(c => c.classList.remove('selected'));
         card.classList.add('selected');
-        const radio = card.querySelector('input[type="radio"]');
-        if (radio) radio.checked = true;
-        spenderError.classList.remove('show');
+        card.querySelector('input').checked = true;
+        spenderErr.classList.remove('show');
       });
     });
   }
 
-  function getSelectedSpender() {
-    const checked = spenderSelector.querySelector('input[name="spentByPerson"]:checked');
-    return checked ? checked.value : null;
+  function getSelectedSpender(container) {
+    const el = container.querySelector('input[type="radio"]:checked');
+    return el ? el.value : null;
   }
 
-  // Render "Spent For" checkboxes
-  function renderBorrowSpentForCheckboxes() {
-    if (people.length === 0) {
-      individualCheckboxes.innerHTML = '<div class="empty-state-sm">No members added yet.</div>';
+  // ─── INDIVIDUAL CHECKBOXES ───────────────────────────────────────────────────
+  function renderIndividualCheckboxes() {
+    if (!people.length) {
+      individualChks.innerHTML = '<div class="empty-hint">Add people to see them here.</div>';
+      updateCounter();
       return;
     }
+    individualChks.innerHTML = people.map(p => `
+      <label class="chk-item">
+        <input type="checkbox" name="spentFor" value="${p}" />
+        <span class="chk-box"></span>
+        <span class="chk-label">${p}</span>
+      </label>
+    `).join('');
 
-    // Remember currently checked people if re-rendering
-    const currentChecked = Array.from(individualCheckboxes.querySelectorAll('input[type="checkbox"]:checked')).map(c => c.value);
-
-    individualCheckboxes.innerHTML = people.map(person => {
-      const isChecked = currentChecked.includes(person);
-      return `
-        <label class="checkbox-item">
-          <input type="checkbox" name="spentForPerson" value="${person}" ${isChecked ? 'checked' : ''} />
-          <span class="custom-checkbox"></span>
-          <span class="checkbox-text">${person}</span>
-        </label>
-      `;
-    }).join('');
-
-    // Setup event listeners for individual checkboxes
-    const checkboxes = individualCheckboxes.querySelectorAll('input[type="checkbox"]');
-    checkboxes.forEach(cb => {
+    individualChks.querySelectorAll('input[type="checkbox"]').forEach(cb => {
       cb.addEventListener('change', () => {
-        syncEveryoneCheckbox();
-        updateSelectionCounter();
-        spentForError.classList.remove('show');
+        syncEveryone();
+        updateCounter();
+        spentForErr.classList.remove('show');
       });
     });
-
-    syncEveryoneCheckbox();
-    updateSelectionCounter();
+    updateCounter();
   }
 
-  function syncEveryoneCheckbox() {
-    const individualCbs = individualCheckboxes.querySelectorAll('input[type="checkbox"]');
-    if (individualCbs.length === 0) {
-      chkEveryone.checked = false;
-      return;
-    }
-    const allChecked = Array.from(individualCbs).every(cb => cb.checked);
-    chkEveryone.checked = allChecked;
+  function syncEveryone() {
+    const cbs = individualChks.querySelectorAll('input[type="checkbox"]');
+    if (!cbs.length) { chkEveryone.checked = false; return; }
+    chkEveryone.checked = Array.from(cbs).every(c => c.checked);
   }
 
-  function updateSelectionCounter() {
-    const count = individualCheckboxes.querySelectorAll('input[type="checkbox"]:checked').length;
-    selectionCounter.textContent = `${count} ${count === 1 ? 'person' : 'people'} selected`;
+  function updateCounter() {
+    const n = individualChks.querySelectorAll('input[type="checkbox"]:checked').length;
+    spentForCounter.textContent = `${n} ${n === 1 ? 'person' : 'people'} selected`;
   }
 
-  // Handle "Everyone" checkbox toggle
-  if (chkEveryone) {
-    chkEveryone.addEventListener('change', () => {
-      const checked = chkEveryone.checked;
-      const cbs = individualCheckboxes.querySelectorAll('input[type="checkbox"]');
-      cbs.forEach(cb => cb.checked = checked);
-      updateSelectionCounter();
-      if (checked) spentForError.classList.remove('show');
-    });
-  }
+  chkEveryone.addEventListener('change', () => {
+    individualChks.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = chkEveryone.checked);
+    updateCounter();
+    if (chkEveryone.checked) spentForErr.classList.remove('show');
+  });
 
-  // ================= 8 & 19. RESET BORROW FORM COMPLETELY =================
+  // ─── SPEND AMOUNT CARDS ──────────────────────────────────────────────────────
   /**
-   * Resets the Borrow Amount form completely.
-   * - Deselects the Spent By person
-   * - Clears the amount
-   * - Unchecks all Spent For checkboxes (including Everyone)
-   * - Clears description & tag chips
-   * - NO persistent selected spender!
+   * Each person's card shows:
+   *  - Name + Balance badge at top
+   *  - List of expenses paid FOR them (description, date, share amount, who paid at bottom)
+   *  - Total share at the bottom
+   *  - "View full details →" link
    */
-  function resetBorrowForm() {
-    borrowForm.reset();
-    
-    // Deselect all Spent By cards
-    spenderSelector.querySelectorAll('.spender-card').forEach(card => {
-      card.classList.remove('selected');
-      const radio = card.querySelector('input[type="radio"]');
-      if (radio) radio.checked = false;
-    });
-
-    // Uncheck Everyone & all individual checkboxes
-    if (chkEveryone) chkEveryone.checked = false;
-    individualCheckboxes.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-      cb.checked = false;
-    });
-
-    // Clear tag chip highlights
-    quickTags.querySelectorAll('.tag-chip').forEach(t => t.classList.remove('active'));
-
-    // Clear errors
-    spenderError.classList.remove('show');
-    amountError.classList.remove('show');
-    spentForError.classList.remove('show');
-
-    // Reset date to today
-    expenseDateInput.value = new Date().toISOString().split('T')[0];
-
-    updateSelectionCounter();
-  }
-
-  // ================= 10. SPEND AMOUNT CARDS =================
-  function renderSpendAmountCards(data) {
-    if (people.length === 0) {
-      personCardsGrid.innerHTML = `
-        <div class="empty-state-sm" style="grid-column: 1 / -1; padding: 32px 16px;">
-          No trip members yet. Add people to start calculating spending splits.
+  function renderPersonCards({ stats, forPerson, transactions }) {
+    if (!people.length) {
+      personCards.innerHTML = `
+        <div class="empty-state">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:#94a3b8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <p>Add people and record expenses to see the split breakdown here.</p>
         </div>`;
       return;
     }
 
-    personCardsGrid.innerHTML = people.map(person => {
-      const stat = data.stats[person] || {
-        totalPaid: 0,
-        personalShare: 0,
-        paidForOthers: 0,
-        othersPaidForMe: 0,
-        balance: 0
-      };
-
+    personCards.innerHTML = people.map(person => {
+      const stat = stats[person] || { totalPaid: 0, share: 0, balance: 0 };
+      const exps = forPerson[person] || [];
       const balance = stat.balance;
-      let badgeHtml = '';
-      let actionHint = '';
 
-      if (balance > 0.01) {
-        badgeHtml = `<span class="balance-badge receive">+${formatINR(balance)} to receive</span>`;
-        // Find who owes this person from direct settlement
-        const debtorsToThis = data.settlementTransactions.filter(t => t.to === person);
-        if (debtorsToThis.length > 0) {
-          const names = debtorsToThis.map(d => d.from).join(', ');
-          actionHint = `<span class="person-card-action-hint receive-from-hint">Receive from ${names}</span>`;
-        }
-      } else if (balance < -0.01) {
-        badgeHtml = `<span class="balance-badge give">${formatINR(Math.abs(balance))} to give</span>`;
-        // Find whom this person owes
-        const creditorsForThis = data.settlementTransactions.filter(t => t.from === person);
-        if (creditorsForThis.length > 0) {
-          const names = creditorsForThis.map(c => c.to).join(', ');
-          actionHint = `<span class="person-card-action-hint give-to-hint">Give to ${names}</span>`;
-        }
+      // Balance chip
+      let chipClass = 'chip--grey';
+      let chipText  = 'Settled';
+      if (balance > 0.01)       { chipClass = 'chip--green'; chipText = `+${fmtINR(balance)} to receive`; }
+      else if (balance < -0.01) { chipClass = 'chip--red';   chipText = `${fmtINR(Math.abs(balance))} to pay`; }
+
+      // Expense rows for this person
+      let expRows = '';
+      if (!exps.length) {
+        expRows = `<div class="pcard-no-expenses">No expenses recorded for ${person} yet.</div>`;
       } else {
-        badgeHtml = `<span class="balance-badge settled">Settled (₹0)</span>`;
-        actionHint = `<span class="person-card-action-hint">All even ✓</span>`;
+        expRows = `<div class="pcard-expenses">` + exps.map(e => `
+          <div class="pexp-row">
+            <div class="pexp-left">
+              <span class="pexp-desc">${e.desc}</span>
+              <span class="pexp-paidby">
+                <span class="avatar-sm">${initials(e.paidBy)}</span>
+                Paid by ${e.paidBy} • ${fmtDate(e.date)}
+              </span>
+            </div>
+            <span class="pexp-amount">${fmtINR(e.share)}</span>
+          </div>
+        `).join('') + `</div>`;
       }
 
       return `
-        <div class="person-card" data-person="${person}">
-          <div class="person-card-header">
-            <div class="person-card-title">
-              <div class="person-avatar">${getInitials(person)}</div>
-              <span class="person-card-name">${person}</span>
+        <div class="pcard">
+          <div class="pcard-header">
+            <div class="pcard-person">
+              <div class="avatar">${initials(person)}</div>
+              <span class="pcard-name">${person}</span>
             </div>
-            ${badgeHtml}
+            <span class="pcard-balance-chip ${chipClass}">${chipText}</span>
           </div>
 
-          <table class="person-breakdown-table">
-            <tbody>
-              <tr>
-                <td class="td-label">Total Paid</td>
-                <td class="font-blue">${formatINR(stat.totalPaid)}</td>
-              </tr>
-              <tr>
-                <td class="td-label">Personal Share</td>
-                <td>${formatINR(stat.personalShare)}</td>
-              </tr>
-              <tr>
-                <td class="td-label">Paid For Others</td>
-                <td class="font-emerald">${formatINR(stat.paidForOthers)}</td>
-              </tr>
-              <tr>
-                <td class="td-label">Others Paid For ${person}</td>
-                <td class="font-rose">${formatINR(stat.othersPaidForMe)}</td>
-              </tr>
-            </tbody>
-          </table>
+          ${expRows}
 
-          <div class="person-card-balance">
-            <div>${actionHint}</div>
-            <span class="btn-link" style="font-size: 0.75rem; text-decoration: none;">View Details →</span>
+          <div class="pcard-total">
+            <span class="pcard-total-label">Total Share for ${person}</span>
+            <span class="pcard-total-amt">${fmtINR(stat.share)}</span>
           </div>
+
+          <button class="view-details" data-person="${person}">View full breakdown →</button>
         </div>
       `;
     }).join('');
 
-    // Attach click listeners to cards to open Person Details modal
-    personCardsGrid.querySelectorAll('.person-card').forEach(card => {
+    // Attach detail modal listeners
+    personCards.querySelectorAll('.view-details').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const data = calculate();
+        openDetailModal(btn.dataset.person, data);
+      });
+    });
+
+    // Clicking the card itself also opens detail
+    personCards.querySelectorAll('.pcard').forEach(card => {
       card.addEventListener('click', () => {
-        const personName = card.dataset.person;
-        openPersonDetailsModal(personName, data);
+        const data = calculate();
+        const btn = card.querySelector('.view-details');
+        if (btn) openDetailModal(btn.dataset.person, data);
       });
     });
   }
 
-  // ================= 11. PERSON DETAILS MODAL =================
-  function openPersonDetailsModal(personName, data) {
-    const stat = data.stats[personName] || {
-      totalPaid: 0,
-      personalShare: 0,
-      paidForOthers: 0,
-      othersPaidForMe: 0,
-      balance: 0,
-      expensesPaid: []
-    };
-
-    detailPersonAvatar.textContent = getInitials(personName);
-    detailPersonName.textContent = personName;
-    detailTotalPaid.textContent = formatINR(stat.totalPaid);
-    detailPersonalShare.textContent = formatINR(stat.personalShare);
-    detailPaidForOthers.textContent = formatINR(stat.paidForOthers);
-    detailOthersPaidFor.textContent = formatINR(stat.othersPaidForMe);
-
-    // Final balance banner
-    const balance = stat.balance;
-    detailBalanceBanner.className = 'person-balance-banner';
-
-    if (balance > 0.01) {
-      detailBalanceBanner.classList.add('receive');
-      detailFinalBalance.textContent = `${formatINR(balance)} to receive`;
-      detailPersonStatus.textContent = 'Net Creditor (Owed money)';
-    } else if (balance < -0.01) {
-      detailBalanceBanner.classList.add('give');
-      detailFinalBalance.textContent = `${formatINR(Math.abs(balance))} to give`;
-      detailPersonStatus.textContent = 'Net Debtor (Needs to pay)';
-    } else {
-      detailBalanceBanner.classList.add('settled');
-      detailFinalBalance.textContent = '₹0 (Settled)';
-      detailPersonStatus.textContent = 'Fully settled up';
-    }
-
-    // Populate Table: expenses where person paid
-    detailTableTitle.textContent = `${personName}'s Expenses`;
-    const paidExpenses = stat.expensesPaid || [];
-
-    if (paidExpenses.length === 0) {
-      detailExpensesTableBody.innerHTML = `
-        <tr>
-          <td colspan="4" class="empty-state-sm">No expenses paid by ${personName} yet.</td>
-        </tr>
-      `;
-    } else {
-      detailExpensesTableBody.innerHTML = paidExpenses.map(exp => {
-        const forDisplay = (exp.spentFor.length === people.length)
-          ? 'Everyone'
-          : exp.spentFor.join(', ');
-
-        return `
-          <tr>
-            <td>${formatDateFriendly(exp.date)}</td>
-            <td class="text-right font-mono font-bold">${formatINR(exp.amount)}</td>
-            <td>${forDisplay}</td>
-            <td>${exp.description || '—'}</td>
-          </tr>
-        `;
-      }).join('');
-    }
-
-    openModal(modalPersonDetails);
-  }
-
-  // ================= 12 & 13. DIRECT PAYMENT DIRECTIONS =================
-  function renderDirections(data) {
-    const directDebts = data.directDebts || [];
-
-    // Give List: who needs to give money (A → B)
-    if (directDebts.length === 0) {
-      giveList.innerHTML = '<div class="empty-state-sm">Nothing to give ✓</div>';
-      receiveList.innerHTML = '<div class="empty-state-sm">Nothing to receive ✓</div>';
+  // ─── SETTLEMENT ──────────────────────────────────────────────────────────────
+  function renderSettlement({ transactions }) {
+    if (!transactions.length) {
+      settlementList.innerHTML = '<div class="settle-empty">All settled up once you add expenses.</div>';
       return;
     }
-
-    giveList.innerHTML = directDebts.map(debt => `
-      <div class="direction-item">
-        <div class="direction-transfer">
-          <span>${debt.from}</span>
-          <span class="direction-arrow">→</span>
-          <span>${debt.to}</span>
-        </div>
-        <span class="direction-amount font-rose">${formatINR(debt.amount)}</span>
-      </div>
-    `).join('');
-
-    // Receive List: who receives money (B ← A)
-    receiveList.innerHTML = directDebts.map(debt => `
-      <div class="direction-item">
-        <div class="direction-transfer">
-          <span>${debt.to}</span>
-          <span class="direction-arrow">←</span>
-          <span>${debt.from}</span>
-        </div>
-        <span class="direction-amount font-emerald">${formatINR(debt.amount)}</span>
-      </div>
-    `).join('');
-  }
-
-  // ================= 14. FINAL SETTLEMENT =================
-  function renderFinalSettlement(data) {
-    const settlements = data.settlementTransactions || [];
-
-    if (settlements.length === 0) {
-      finalSettlementList.innerHTML = `
-        <div class="settlement-all-even">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 8px; display: block; color: #4ade80;">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-            <polyline points="22 4 12 14.01 9 11.01"></polyline>
-          </svg>
-          <strong>All Settled Up!</strong>
-          <p style="margin-top: 4px; font-size: 0.8125rem;">Everyone has paid their exact share. No pending transfers needed.</p>
-        </div>
-      `;
-      return;
-    }
-
-    finalSettlementList.innerHTML = settlements.map(item => `
-      <div class="settlement-item">
-        <div class="settlement-flow">
+    settlementList.innerHTML = transactions.map(t => `
+      <div class="settle-item">
+        <div class="settle-flow">
           <div class="settle-party">
-            <div class="person-avatar" style="width: 24px; height: 24px; font-size: 0.6875rem;">${getInitials(item.from)}</div>
-            <span>${item.from}</span>
+            <div class="avatar" style="width:24px;height:24px;font-size:.6rem">${initials(t.from)}</div>
+            ${t.from}
           </div>
           <div class="settle-arrow">
             <span>pays</span>
-            <span>→</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
           </div>
           <div class="settle-party">
-            <div class="person-avatar" style="width: 24px; height: 24px; font-size: 0.6875rem; background: #2563eb; color: #fff;">${getInitials(item.to)}</div>
-            <span>${item.to}</span>
+            <div class="avatar" style="width:24px;height:24px;font-size:.6rem;background:var(--blue);color:#fff">${initials(t.to)}</div>
+            ${t.to}
           </div>
         </div>
-        <div class="settlement-amount">${formatINR(item.amount)}</div>
+        <span class="settle-amount">${fmtINR(t.amount)}</span>
       </div>
     `).join('');
   }
 
-  // ================= 15. EXPENSE HISTORY =================
-  function renderExpenseHistory() {
-    historyCountBadge.textContent = expenses.length;
+  // ─── PERSON DETAIL MODAL ─────────────────────────────────────────────────────
+  function openDetailModal(person, { stats, forPerson }) {
+    const stat = stats[person] || { totalPaid: 0, share: 0, balance: 0 };
+    const exps = forPerson[person] || [];
+    const balance = stat.balance;
 
-    if (expenses.length === 0) {
-      expenseHistoryList.innerHTML = `
-        <div class="empty-state-sm" style="padding: 24px 8px;">
-          No expenses recorded yet. Fill out the Borrow Amount form above to add your first expense.
-        </div>
-      `;
-      return;
+    detailAvatar.textContent  = initials(person);
+    detailName.textContent    = person;
+    dTotalPaid.textContent    = fmtINR(stat.totalPaid);
+    dTotalShare.textContent   = fmtINR(stat.share);
+    dBalance.textContent      = fmtINR(Math.abs(balance));
+
+    // Balance banner
+    dBalanceBanner.className = 'balance-banner';
+    if (balance > 0.01) {
+      dBalanceBanner.classList.add('receive');
+      dBalanceLabel.textContent = `${person} should receive:`;
+      dBalanceAmt.textContent   = fmtINR(balance);
+      detailStatus.textContent  = 'Net Creditor – owed money';
+    } else if (balance < -0.01) {
+      dBalanceBanner.classList.add('give');
+      dBalanceLabel.textContent = `${person} needs to pay:`;
+      dBalanceAmt.textContent   = fmtINR(Math.abs(balance));
+      detailStatus.textContent  = 'Net Debtor – needs to pay';
+    } else {
+      dBalanceBanner.classList.add('settled');
+      dBalanceLabel.textContent = `${person} is fully settled.`;
+      dBalanceAmt.textContent   = '₹0';
+      detailStatus.textContent  = 'All even ✓';
     }
 
-    // Sort latest first
-    const sorted = [...expenses].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    // Expense breakdown list
+    dExpTitle.textContent = `What was spent for ${person}`;
 
-    expenseHistoryList.innerHTML = sorted.map(exp => {
-      const isForEveryone = exp.spentFor && exp.spentFor.length === people.length;
-      const forText = isForEveryone ? 'Everyone' : (exp.spentFor || []).join(', ');
-
-      return `
-        <div class="expense-card" data-id="${exp.id}">
-          <div class="expense-card-top">
-            <div class="expense-card-payer">
-              <div class="person-avatar">${getInitials(exp.spentBy)}</div>
-              <div>
-                <strong>${exp.spentBy}</strong> paid
-              </div>
-            </div>
-            <div class="expense-card-amount">${formatINR(exp.amount)}</div>
+    if (!exps.length) {
+      dBreakdownList.innerHTML = `<div class="bkrow"><span class="bkrow-left"><span class="bkrow-desc" style="color:var(--light)">No expenses recorded for ${person} yet.</span></span></div>`;
+    } else {
+      const rows = exps.map(e => `
+        <div class="bkrow">
+          <div class="bkrow-left">
+            <span class="bkrow-desc">${e.desc}</span>
+            <span class="bkrow-meta">
+              Paid by <strong>${e.paidBy}</strong> • 
+              ${e.spentFor && e.spentFor.length > 1 ? `Split ${e.spentFor.length} ways (₹${(e.amount/e.spentFor.length).toFixed(2)} each)` : 'Full amount'} •
+              ${fmtDate(e.date)}
+            </span>
           </div>
+          <span class="bkrow-amt">${fmtINR(e.share)}</span>
+        </div>
+      `).join('');
 
-          <div class="expense-card-details">
-            <div>
-              <span class="expense-for-label">For:</span>
-              <strong>${forText}</strong>
-            </div>
-            ${exp.description ? `<span class="expense-desc-badge">${exp.description}</span>` : ''}
-            <span class="text-muted" style="font-size: 0.75rem;">${formatDateFriendly(exp.date)}</span>
+      const totalRow = `
+        <div class="bkrow bkrow-total">
+          <div class="bkrow-left">
+            <span class="bkrow-desc">Total Share for ${person}</span>
           </div>
-
-          <div class="expense-card-actions">
-            <button type="button" class="btn-action-text btn-action-edit" data-edit-id="${exp.id}">
-              Edit
-            </button>
-            <button type="button" class="btn-action-text btn-action-delete" data-delete-id="${exp.id}">
-              Delete
-            </button>
-          </div>
+          <span class="bkrow-amt">${fmtINR(stat.share)}</span>
         </div>
       `;
-    }).join('');
 
-    // Attach Edit and Delete listeners
-    expenseHistoryList.querySelectorAll('[data-edit-id]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openEditExpenseModal(btn.dataset.editId);
-      });
-    });
+      dBreakdownList.innerHTML = rows + totalRow;
+    }
 
-    expenseHistoryList.querySelectorAll('[data-delete-id]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        deleteExpense(btn.dataset.deleteId);
-      });
-    });
+    openModal(modalPersonDetail);
   }
 
-  // ================= 8 & 9. BORROW AMOUNT FORM SUBMISSION =================
-  borrowForm.addEventListener('submit', (e) => {
+  // ─── BORROW FORM SUBMIT ───────────────────────────────────────────────────────
+  borrowForm.addEventListener('submit', e => {
     e.preventDefault();
 
-    const spentBy = getSelectedSpender();
-    const amount = parseFloat(expenseAmountInput.value);
-    const checkedForNodes = individualCheckboxes.querySelectorAll('input[type="checkbox"]:checked');
-    const spentFor = Array.from(checkedForNodes).map(cb => cb.value);
-    const description = expenseDescriptionInput.value.trim();
-    const date = expenseDateInput.value || new Date().toISOString().split('T')[0];
+    const spentBy    = getSelectedSpender(spenderGrid);
+    const amount     = parseFloat(inpAmount.value);
+    const spentFor   = Array.from(individualChks.querySelectorAll('input:checked')).map(c => c.value);
+    const description = inpDesc.value.trim();
+    const date       = inpDate.value || today();
 
-    let hasError = false;
+    let err = false;
 
-    // Validate Spender
-    if (!spentBy) {
-      spenderError.classList.add('show');
-      hasError = true;
-    } else {
-      spenderError.classList.remove('show');
-    }
+    if (!spentBy)               { spenderErr.classList.add('show');  err = true; }
+    else                         { spenderErr.classList.remove('show'); }
 
-    // Validate Amount
-    if (isNaN(amount) || amount <= 0) {
-      amountError.classList.add('show');
-      hasError = true;
-    } else {
-      amountError.classList.remove('show');
-    }
+    if (!amount || amount <= 0) { amountErr.classList.add('show');   err = true; }
+    else                         { amountErr.classList.remove('show'); }
 
-    // Validate Spent For
-    if (spentFor.length === 0) {
-      spentForError.classList.add('show');
-      hasError = true;
-    } else {
-      spentForError.classList.remove('show');
-    }
+    if (!spentFor.length)       { spentForErr.classList.add('show'); err = true; }
+    else                         { spentForErr.classList.remove('show'); }
 
-    if (hasError) return;
+    if (err) return;
 
-    // 1. Create and save expense record
-    const newExpense = {
-      id: generateId(),
-      spentBy,
-      amount,
-      spentFor,
-      description,
-      date,
-      createdAt: Date.now()
-    };
-
-    expenses.push(newExpense);
-    saveState();
-
-    // 2. Immediately update calculations, Spend Amount, & Expense History
+    expenses.push({ id: genId(), spentBy, amount, spentFor, description, date, createdAt: Date.now() });
+    save();
     renderAll();
-
-    // 3. COMPLETELY RESET THE BORROW AMOUNT FORM (No persistent selected spender!)
-    resetBorrowForm();
+    resetForm();
   });
 
-  // Quick Tags Click Handler
-  quickTags.addEventListener('click', (e) => {
-    const chip = e.target.closest('.tag-chip');
+  // ─── RESET FORM (COMPLETE – no persistent spender) ───────────────────────────
+  function resetForm() {
+    borrowForm.reset();
+
+    // Deselect all spender cards
+    spenderGrid.querySelectorAll('.spender-card').forEach(c => {
+      c.classList.remove('selected');
+      const r = c.querySelector('input');
+      if (r) r.checked = false;
+    });
+
+    // Uncheck Everyone + individual checkboxes
+    chkEveryone.checked = false;
+    individualChks.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+
+    // Clear chips
+    quickChips.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+
+    // Clear errors
+    spenderErr.classList.remove('show');
+    amountErr.classList.remove('show');
+    spentForErr.classList.remove('show');
+
+    // Reset date
+    inpDate.value = today();
+    updateCounter();
+  }
+
+  // ─── QUICK CHIPS ─────────────────────────────────────────────────────────────
+  quickChips.addEventListener('click', e => {
+    const chip = e.target.closest('.chip');
     if (!chip) return;
-    const tag = chip.dataset.tag;
-    quickTags.querySelectorAll('.tag-chip').forEach(c => c.classList.remove('active'));
+    quickChips.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
     chip.classList.add('active');
-    expenseDescriptionInput.value = tag;
+    inpDesc.value = chip.dataset.tag;
   });
 
-  // ================= 1. ADD PERSON MODAL & LOGIC =================
+  // ─── ADD PERSON ───────────────────────────────────────────────────────────────
   btnOpenAddPerson.addEventListener('click', () => {
-    newPersonNameInput.value = '';
-    personNameError.classList.remove('show');
+    inpPersonName.value = '';
+    personNameErr.classList.remove('show');
     openModal(modalAddPerson);
-    setTimeout(() => newPersonNameInput.focus(), 100);
+    setTimeout(() => inpPersonName.focus(), 80);
   });
 
-  formAddPerson.addEventListener('submit', (e) => {
+  formAddPerson.addEventListener('submit', e => {
     e.preventDefault();
-    const name = newPersonNameInput.value.trim();
-
+    const name = inpPersonName.value.trim();
     if (!name) {
-      personNameError.textContent = 'Please enter a name.';
-      personNameError.classList.add('show');
+      personNameErr.textContent = 'Please enter a name.';
+      personNameErr.classList.add('show');
       return;
     }
-
-    // Check duplicate
     if (people.some(p => p.toLowerCase() === name.toLowerCase())) {
-      personNameError.textContent = `"${name}" is already in the trip!`;
-      personNameError.classList.add('show');
+      personNameErr.textContent = `"${name}" is already in the trip.`;
+      personNameErr.classList.add('show');
       return;
     }
-
     people.push(name);
-    saveState();
+    save();
     closeModal(modalAddPerson);
     renderAll();
   });
 
-  // ================= CUSTOM AVERAGE TARGET OVERRIDE =================
-  btnToggleCustomAvg.addEventListener('click', () => {
-    if (customAvgRow.style.display === 'none') {
-      customAvgRow.style.display = 'flex';
-      customAvgInput.value = customAverageOverride !== null ? customAverageOverride : '';
-      customAvgInput.focus();
-    } else {
-      customAvgRow.style.display = 'none';
+  // ─── CUSTOM AVERAGE ───────────────────────────────────────────────────────────
+  btnToggleAvg.addEventListener('click', () => {
+    const visible = customAvgRow.style.display === 'flex';
+    customAvgRow.style.display = visible ? 'none' : 'flex';
+    if (!visible) {
+      customAvgInp.value = customAvg !== null ? customAvg : '';
+      customAvgInp.focus();
     }
   });
 
-  btnSaveCustomAvg.addEventListener('click', () => {
-    const val = parseFloat(customAvgInput.value);
-    if (!isNaN(val) && val >= 0) {
-      customAverageOverride = val;
-      saveState();
+  btnSaveAvg.addEventListener('click', () => {
+    const v = parseFloat(customAvgInp.value);
+    if (!isNaN(v) && v >= 0) {
+      customAvg = v;
+      save();
       renderAll();
       customAvgRow.style.display = 'none';
     }
   });
 
-  btnResetCustomAvg.addEventListener('click', () => {
-    customAverageOverride = null;
-    customAvgInput.value = '';
-    saveState();
+  btnResetAvg.addEventListener('click', () => {
+    customAvg = null;
+    customAvgInp.value = '';
+    save();
     renderAll();
     customAvgRow.style.display = 'none';
   });
 
-  // ================= EDIT EXPENSE MODAL & LOGIC =================
-  function openEditExpenseModal(id) {
-    const exp = expenses.find(e => e.id === id);
+  // ─── EDIT EXPENSE ─────────────────────────────────────────────────────────────
+  // Edit is triggered from the Person Detail modal's breakdown entries (via dedicated edit buttons if needed)
+  // For now, we keep edit accessible from the breakdown modal (future enhancement: add edit buttons in breakdown rows)
+  // For the current design, edit can be called programmatically:
+  window.openEditExpense = function(expId) {
+    const exp = expenses.find(e => e.id === expId);
     if (!exp) return;
 
-    editExpenseId.value = exp.id;
-    editExpenseAmount.value = exp.amount;
-    editExpenseDescription.value = exp.description || '';
-    editExpenseDate.value = exp.date || new Date().toISOString().split('T')[0];
+    editId.value  = exp.id;
+    editAmt.value = exp.amount;
+    editDesc.value = exp.description || '';
+    editDate.value = exp.date || today();
 
-    // Spender selector in edit modal
-    editSpenderSelector.innerHTML = people.map(p => `
-      <label class="spender-card ${exp.spentBy === p ? 'selected' : ''}">
-        <input type="radio" name="editSpentByPerson" value="${p}" ${exp.spentBy === p ? 'checked' : ''} />
-        <div class="person-avatar">${getInitials(p)}</div>
-        <span class="spender-name">${p}</span>
-        <span class="radio-check-circle"></span>
+    renderSpenderOptions(editSpenderGrid, exp.spentBy, people);
+
+    const isAll = exp.spentFor && exp.spentFor.length === people.length;
+    editChkAll.checked = isAll;
+
+    editIndChks.innerHTML = people.map(p => `
+      <label class="chk-item">
+        <input type="checkbox" name="editSpentFor" value="${p}" ${exp.spentFor && exp.spentFor.includes(p) ? 'checked' : ''} />
+        <span class="chk-box"></span>
+        <span class="chk-label">${p}</span>
       </label>
     `).join('');
 
-    editSpenderSelector.querySelectorAll('.spender-card').forEach(card => {
-      card.addEventListener('click', () => {
-        editSpenderSelector.querySelectorAll('.spender-card').forEach(c => c.classList.remove('selected'));
-        card.classList.add('selected');
-        const radio = card.querySelector('input[type="radio"]');
-        if (radio) radio.checked = true;
-      });
-    });
+    const updateEditCounter = () => {
+      const n = editIndChks.querySelectorAll('input:checked').length;
+      editCounter.textContent = `${n} selected`;
+      editChkAll.checked = n === people.length && people.length > 0;
+    };
 
-    // Checkboxes in edit modal
-    const isEveryoneChecked = exp.spentFor && exp.spentFor.length === people.length;
-    editChkEveryone.checked = isEveryoneChecked;
-
-    editIndividualCheckboxes.innerHTML = people.map(p => {
-      const isChecked = exp.spentFor && exp.spentFor.includes(p);
-      return `
-        <label class="checkbox-item">
-          <input type="checkbox" name="editSpentForPerson" value="${p}" ${isChecked ? 'checked' : ''} />
-          <span class="custom-checkbox"></span>
-          <span class="checkbox-text">${p}</span>
-        </label>
-      `;
-    }).join('');
-
-    const editCbs = editIndividualCheckboxes.querySelectorAll('input[type="checkbox"]');
-    function updateEditCounter() {
-      const count = editIndividualCheckboxes.querySelectorAll('input[type="checkbox"]:checked').length;
-      editSelectionCounter.textContent = `${count} selected`;
-      editChkEveryone.checked = count === people.length && people.length > 0;
-    }
-
-    editCbs.forEach(cb => cb.addEventListener('change', updateEditCounter));
-    editChkEveryone.onchange = () => {
-      editCbs.forEach(cb => cb.checked = editChkEveryone.checked);
+    editIndChks.querySelectorAll('input').forEach(c => c.addEventListener('change', updateEditCounter));
+    editChkAll.onchange = () => {
+      editIndChks.querySelectorAll('input').forEach(c => c.checked = editChkAll.checked);
       updateEditCounter();
     };
 
     updateEditCounter();
-    openModal(modalEditExpense);
-  }
+    openModal(modalEdit);
+  };
 
-  formEditExpense.addEventListener('submit', (e) => {
+  formEdit.addEventListener('submit', e => {
     e.preventDefault();
-    const id = editExpenseId.value;
-    const exp = expenses.find(e => e.id === id);
+    const exp = expenses.find(e => e.id === editId.value);
     if (!exp) return;
 
-    const checkedRadio = editSpenderSelector.querySelector('input[name="editSpentByPerson"]:checked');
-    const spentBy = checkedRadio ? checkedRadio.value : exp.spentBy;
-    const amount = parseFloat(editExpenseAmount.value);
-    const spentFor = Array.from(editIndividualCheckboxes.querySelectorAll('input[name="editSpentForPerson"]:checked')).map(cb => cb.value);
+    const checkedSpender = editSpenderGrid.querySelector('input[type="radio"]:checked');
+    const spentFor = Array.from(editIndChks.querySelectorAll('input:checked')).map(c => c.value);
+    const amount = parseFloat(editAmt.value);
 
-    if (isNaN(amount) || amount <= 0 || spentFor.length === 0) {
+    if (!amount || amount <= 0 || !spentFor.length) {
       alert('Please enter a valid amount and select at least one person.');
       return;
     }
 
-    exp.spentBy = spentBy;
-    exp.amount = amount;
-    exp.spentFor = spentFor;
-    exp.description = editExpenseDescription.value.trim();
-    exp.date = editExpenseDate.value;
+    exp.spentBy      = checkedSpender ? checkedSpender.value : exp.spentBy;
+    exp.amount       = amount;
+    exp.spentFor     = spentFor;
+    exp.description  = editDesc.value.trim();
+    exp.date         = editDate.value;
 
-    saveState();
-    closeModal(modalEditExpense);
+    save();
+    closeModal(modalEdit);
     renderAll();
   });
 
-  function deleteExpense(id) {
-    const exp = expenses.find(e => e.id === id);
-    if (!exp) return;
-
-    if (confirm(`Delete expense "${exp.description || 'Expense'}" of ${formatINR(exp.amount)} paid by ${exp.spentBy}?`)) {
-      expenses = expenses.filter(e => e.id !== id);
-      saveState();
-      renderAll();
-    }
-  }
-
-  // ================= GENERAL MODAL HELPERS =================
-  function openModal(modal) {
-    if (!modal) return;
-    modal.classList.add('open');
-    modal.setAttribute('aria-hidden', 'false');
-  }
-
-  function closeModal(modal) {
-    if (!modal) return;
-    modal.classList.remove('open');
-    modal.setAttribute('aria-hidden', 'true');
-  }
-
-  document.querySelectorAll('[data-close]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const modalId = btn.dataset.close;
-      closeModal(document.getElementById(modalId));
-    });
-  });
-
-  // Close when clicking modal backdrop
-  document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
-    backdrop.addEventListener('click', (e) => {
-      if (e.target === backdrop) {
-        closeModal(backdrop);
-      }
-    });
-  });
-
-  // ESC key closes modals
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      document.querySelectorAll('.modal-backdrop.open').forEach(closeModal);
-    }
-  });
-
-  // ================= DEMO RESET, CLEAR, & EXPORT =================
-  btnResetDemo.addEventListener('click', () => {
-    if (confirm('Reset trip data to default demo (Rahul, Amit, Priya, Arjun with initial dinner expense)?')) {
-      people = [...DEFAULT_PEOPLE];
-      expenses = JSON.parse(JSON.stringify(DEFAULT_EXPENSES));
-      customAverageOverride = null;
-      saveState();
-      renderAll();
-      resetBorrowForm();
-    }
+  // ─── FOOTER ───────────────────────────────────────────────────────────────────
+  btnExport.addEventListener('click', () => {
+    const data = { exportDate: new Date().toISOString(), people, expenses };
+    const url  = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(data, null, 2));
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `tripsplit-${today()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   });
 
   btnClearAll.addEventListener('click', () => {
-    if (confirm('Clear all trip data? This will reset all members and expenses.')) {
-      people = [];
-      expenses = [];
-      customAverageOverride = null;
-      saveState();
+    if (confirm('Clear all trip members and expenses? This cannot be undone.')) {
+      people = []; expenses = []; customAvg = null;
+      save();
       renderAll();
-      resetBorrowForm();
+      resetForm();
     }
   });
 
-  btnExportData.addEventListener('click', () => {
-    const exportObj = {
-      exportDate: new Date().toISOString(),
-      people,
-      expenses,
-      customAverageOverride
-    };
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportObj, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `tripsplit-data-${new Date().toISOString().split('T')[0]}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
+  // ─── MODAL HELPERS ────────────────────────────────────────────────────────────
+  function openModal(modal)  { if (modal) { modal.classList.add('open'); modal.setAttribute('aria-hidden','false'); } }
+  function closeModal(modal) { if (modal) { modal.classList.remove('open'); modal.setAttribute('aria-hidden','true'); } }
+
+  document.querySelectorAll('[data-close]').forEach(btn => {
+    btn.addEventListener('click', () => closeModal(document.getElementById(btn.dataset.close)));
   });
 
-  // ================= INITIALIZATION =================
+  document.querySelectorAll('.modal-bg').forEach(bg => {
+    bg.addEventListener('click', e => { if (e.target === bg) closeModal(bg); });
+  });
+
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape') document.querySelectorAll('.modal-bg.open').forEach(closeModal);
+  });
+
+  // ─── INIT ─────────────────────────────────────────────────────────────────────
   function init() {
-    loadState();
-
-    // Default date input to today
-    if (expenseDateInput) {
-      expenseDateInput.value = new Date().toISOString().split('T')[0];
-    }
-
+    load();
+    inpDate.value = today();
     renderAll();
-    resetBorrowForm();
+    // Don't reset form on init - just ensure it's in clean state
+    renderIndividualCheckboxes();
   }
 
-  // Start app on DOMContentLoaded
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 
 })();

@@ -633,7 +633,54 @@ borrowForm { display: flex; flex-direction: column; gap: 18px; }
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
 
-.settlement-list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.settle-tabs {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--r-full);
+  padding: 3px;
+  gap: 3px;
+}
+
+.settle-tab {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 6px 14px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: var(--r-full);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.settle-tab:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.settle-tab.active {
+  background: #38bdf8;
+  color: #0f172a;
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+.settle-view-hint {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 14px;
+  margin-bottom: 4px;
+  padding: 0 4px;
+}
+
+.settle-view-hint span {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.settlement-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
 
 .settle-item {
   background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12);

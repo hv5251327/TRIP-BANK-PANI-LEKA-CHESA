@@ -64,8 +64,13 @@
   const borrowRecordsList = $('borrowRecordsList');
   const borrowCountBadge  = $('borrowCountBadge');
 
-  // Final Settlement
-  const settlementList    = $('settlementList');
+  // Settlement
+  const settlementList          = $('settlementList');
+  const oneToOneSettlementList  = $('oneToOneSettlementList');
+  const tabOneToOne             = $('tabOneToOne');
+  const tabNetSettle            = $('tabNetSettle');
+  const viewOneToOne            = $('viewOneToOne');
+  const viewNetSettle           = $('viewNetSettle');
 
   // Add Person modal
   const btnOpenAddPerson  = $('btnOpenAddPerson');
@@ -476,7 +481,55 @@
       if (creditors[j].amount <= 0.01) j++;
     }
 
-    return { totalSpend, autoAvg, stats, forPerson, transactions };
+    // ── One-to-One (Pairwise) Settlement: compute direct debts between each pair
+    const directDebts = {};
+    people.forEach(p1 => {
+      directDebts[p1] = {};
+      people.forEach(p2 => { directDebts[p1][p2] = 0; });
+    });
+
+    expenses.forEach(exp => {
+      const payer  = exp.spentBy;
+      const amount = Number(exp.amount) || 0;
+      const bens   = Array.isArray(exp.spentFor) ? exp.spentFor : [];
+      const cnt    = bens.length;
+      if (!cnt) return;
+
+      if (exp.isBorrow) {
+        bens.forEach(b => {
+          if (b !== payer && directDebts[b] && directDebts[b][payer] !== undefined) {
+            directDebts[b][payer] += amount;
+          }
+        });
+      } else {
+        const perHead = Math.round(amount / cnt * 100) / 100;
+        bens.forEach(b => {
+          if (b !== payer && directDebts[b] && directDebts[b][payer] !== undefined) {
+            directDebts[b][payer] += perHead;
+          }
+        });
+      }
+    });
+
+    const pairwiseTransactions = [];
+    for (let pi = 0; pi < people.length; pi++) {
+      for (let pj = pi + 1; pj < people.length; pj++) {
+        const p1 = people[pi];
+        const p2 = people[pj];
+        const p1OwesP2 = (directDebts[p1] && directDebts[p1][p2]) || 0;
+        const p2OwesP1 = (directDebts[p2] && directDebts[p2][p1]) || 0;
+        const net = Math.round((p1OwesP2 - p2OwesP1) * 100) / 100;
+
+        if (net > 0.009) {
+          pairwiseTransactions.push({ from: p1, to: p2, amount: net });
+        } else if (net < -0.009) {
+          pairwiseTransactions.push({ from: p2, to: p1, amount: Math.abs(net) });
+        }
+      }
+    }
+    pairwiseTransactions.sort((a, b) => b.amount - a.amount);
+
+    return { totalSpend, autoAvg, stats, forPerson, transactions, pairwiseTransactions };
   }
 
   // ─── RENDER ALL ──────────────────────────────────────────────────────────────
@@ -803,30 +856,54 @@
   }
 
   // ─── SETTLEMENT ──────────────────────────────────────────────────────────────
-  function renderSettlement({ transactions }) {
-    if (!transactions.length) {
-      settlementList.innerHTML = '<div class="settle-empty">All settled up once you add expenses.</div>';
-      return;
-    }
-    settlementList.innerHTML = transactions.map(t => `
-      <div class="settle-item">
-        <div class="settle-flow">
-          <div class="settle-party">
-            <div class="avatar" style="width:24px;height:24px;font-size:.6rem">${initials(t.from)}</div>
-            ${t.from}
+  function renderSettlement({ transactions, pairwiseTransactions }) {
+    const buildListHtml = (items, emptyMsg) => {
+      if (!items || !items.length) {
+        return `<div class="settle-empty">${emptyMsg}</div>`;
+      }
+      return items.map(t => `
+        <div class="settle-item">
+          <div class="settle-flow">
+            <div class="settle-party">
+              <div class="avatar" style="width:24px;height:24px;font-size:.6rem">${initials(t.from)}</div>
+              ${t.from}
+            </div>
+            <div class="settle-arrow">
+              <span>pays</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </div>
+            <div class="settle-party">
+              <div class="avatar" style="width:24px;height:24px;font-size:.6rem;background:var(--blue);color:#fff">${initials(t.to)}</div>
+              ${t.to}
+            </div>
           </div>
-          <div class="settle-arrow">
-            <span>pays</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-          </div>
-          <div class="settle-party">
-            <div class="avatar" style="width:24px;height:24px;font-size:.6rem;background:var(--blue);color:#fff">${initials(t.to)}</div>
-            ${t.to}
-          </div>
+          <span class="settle-amount">${fmtINR(t.amount)}</span>
         </div>
-        <span class="settle-amount">${fmtINR(t.amount)}</span>
-      </div>
-    `).join('');
+      `).join('');
+    };
+
+    if (oneToOneSettlementList) {
+      oneToOneSettlementList.innerHTML = buildListHtml(pairwiseTransactions, 'No 1-to-1 payments needed – all even!');
+    }
+    if (settlementList) {
+      settlementList.innerHTML = buildListHtml(transactions, 'All settled up once you add expenses.');
+    }
+  }
+
+  // Settlement Mode Tabs (1-to-1 Direct vs Simplified Total)
+  if (tabOneToOne && tabNetSettle) {
+    tabOneToOne.addEventListener('click', () => {
+      tabOneToOne.classList.add('active');
+      tabNetSettle.classList.remove('active');
+      if (viewOneToOne) viewOneToOne.style.display = 'block';
+      if (viewNetSettle) viewNetSettle.style.display = 'none';
+    });
+    tabNetSettle.addEventListener('click', () => {
+      tabNetSettle.classList.add('active');
+      tabOneToOne.classList.remove('active');
+      if (viewOneToOne) viewOneToOne.style.display = 'none';
+      if (viewNetSettle) viewNetSettle.style.display = 'block';
+    });
   }
 
   // ─── PERSON DETAIL MODAL ─────────────────────────────────────────────────────

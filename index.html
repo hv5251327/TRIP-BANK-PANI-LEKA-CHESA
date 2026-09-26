@@ -187,21 +187,47 @@
           </div>
         </div>
 
-        <!-- FINAL SETTLEMENT -->
+        <!-- SETTLEMENT -->
         <div class="panel panel--dark">
-          <div class="panel-head">
+          <div class="panel-head" style="flex-wrap:wrap;gap:12px;justify-content:space-between">
             <div style="display:flex;align-items:center;gap:12px">
               <div class="settle-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
               </div>
               <div>
-                <h3 class="panel-title panel-title--white">Final Settlement</h3>
+                <h3 class="panel-title panel-title--white">Settlement</h3>
                 <p class="panel-desc panel-desc--white">Person on the left pays Person on the right</p>
               </div>
             </div>
+            <!-- Settlement Mode Tabs -->
+            <div class="settle-tabs" role="tablist">
+              <button type="button" class="settle-tab active" id="tabOneToOne" title="Direct 1-to-1 transactions between individuals">
+                👥 1-to-1 Direct
+              </button>
+              <button type="button" class="settle-tab" id="tabNetSettle" title="Simplified minimum cash flow settlement">
+                ⚡ Simplified Total
+              </button>
+            </div>
           </div>
-          <div class="settlement-list" id="settlementList">
-            <div class="settle-empty">All settled up once you add expenses.</div>
+
+          <!-- 1-to-1 Direct View (Active by default) -->
+          <div id="viewOneToOne">
+            <div class="settle-view-hint">
+              <span>Direct 1-to-1 settlement</span> — shows every transaction between who actually paid & borrowed
+            </div>
+            <div class="settlement-list" id="oneToOneSettlementList">
+              <div class="settle-empty">All settled up once you add expenses.</div>
+            </div>
+          </div>
+
+          <!-- Simplified Group View -->
+          <div id="viewNetSettle" style="display:none">
+            <div class="settle-view-hint">
+              <span>Simplified settlement</span> — minimizes total transfers across the whole group
+            </div>
+            <div class="settlement-list" id="settlementList">
+              <div class="settle-empty">All settled up once you add expenses.</div>
+            </div>
           </div>
         </div>
       </section>

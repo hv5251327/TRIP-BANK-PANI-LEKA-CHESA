@@ -592,7 +592,18 @@ borrowForm { display: flex; flex-direction: column; gap: 18px; }
 .bkrow-left { display: flex; flex-direction: column; gap: 2px; }
 .bkrow-desc { font-size: .875rem; font-weight: 600; color: var(--text); }
 .bkrow-meta { font-size: .72rem; color: var(--muted); }
+.bkrow-right { display: flex; align-items: center; gap: 8px; }
 .bkrow-amt { font-family: var(--mono); font-weight: 700; font-size: .95rem; }
+.btn-decrease-amt {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--red-s); border: 1px solid var(--red-b); color: var(--red-d);
+  font-family: var(--font); font-size: .7rem; font-weight: 700;
+  padding: 3px 8px; border-radius: var(--r-sm); cursor: pointer;
+  transition: var(--tr); white-space: nowrap;
+}
+.btn-decrease-amt:hover {
+  background: var(--red); color: #fff; border-color: var(--red);
+}
 .bkrow-total { background: var(--subtle); }
 .bkrow-total .bkrow-desc { font-weight: 800; font-size: .9rem; color: var(--text); }
 .bkrow-total .bkrow-amt { color: var(--text); font-size: 1.05rem; }

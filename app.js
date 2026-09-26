@@ -274,6 +274,10 @@
         card.classList.add('selected');
         card.querySelector('input').checked = true;
         spenderErr.classList.remove('show');
+        // In borrow amount, selecting a payer immediately excludes them from Spent For
+        if (container === spenderGrid) {
+          renderIndividualCheckboxes();
+        }
       });
     });
   }
@@ -285,14 +289,30 @@
 
   // ─── INDIVIDUAL CHECKBOXES ───────────────────────────────────────────────────
   function renderIndividualCheckboxes() {
+    const payer = getSelectedSpender(spenderGrid);
+    // Exclude payer from Borrow Amount: no option to pay or borrow for themselves!
+    const eligiblePeople = payer ? people.filter(p => p !== payer) : people;
+
     if (!people.length) {
       individualChks.innerHTML = '<div class="empty-hint">Add people to see them here.</div>';
       updateCounter();
       return;
     }
-    individualChks.innerHTML = people.map(p => `
+
+    if (!eligiblePeople.length) {
+      individualChks.innerHTML = '<div class="empty-hint">Add other trip members to borrow for.</div>';
+      updateCounter();
+      return;
+    }
+
+    // Keep previously selected eligible people
+    const previouslyChecked = Array.from(individualChks.querySelectorAll('input[type="checkbox"]:checked'))
+      .map(c => c.value)
+      .filter(name => name !== payer);
+
+    individualChks.innerHTML = eligiblePeople.map(p => `
       <label class="chk-item">
-        <input type="checkbox" name="spentFor" value="${p}" />
+        <input type="checkbox" name="spentFor" value="${p}" ${previouslyChecked.includes(p) ? 'checked' : ''} />
         <span class="chk-box"></span>
         <span class="chk-label">${p}</span>
       </label>
@@ -305,6 +325,7 @@
         spentForErr.classList.remove('show');
       });
     });
+    syncEveryone();
     updateCounter();
   }
 
@@ -438,23 +459,15 @@
         renderAll();
       });
 
-      // Prevent card click bubbling when user clicks the input
-      inp.addEventListener('click', e => e.stopPropagation());
+      // Prevent card click bubbling when clicking inside quick-spend form
+      form.addEventListener('click', e => e.stopPropagation());
     });
 
-    // ── Detail modal: "View full breakdown" button
+    // ── Detail modal: ONLY opens when explicitly clicking "View full breakdown →"
     personCards.querySelectorAll('.view-details').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
         openDetailModal(btn.dataset.person, calculate());
-      });
-    });
-
-    // ── Clicking the card body also opens detail
-    personCards.querySelectorAll('.pcard').forEach(card => {
-      card.addEventListener('click', () => {
-        const btn = card.querySelector('.view-details');
-        if (btn) openDetailModal(btn.dataset.person, calculate());
       });
     });
   }
@@ -533,7 +546,13 @@
               ${fmtDate(e.date)}
             </span>
           </div>
-          <span class="bkrow-amt">${fmtINR(e.share)}</span>
+          <div class="bkrow-right">
+            <span class="bkrow-amt">${fmtINR(e.share)}</span>
+            <button type="button" class="btn-decrease-amt" data-exp-id="${e.id}" data-person="${person}" title="Decrease this expenditure">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Decrease
+            </button>
+          </div>
         </div>
       `).join('');
 
@@ -547,6 +566,43 @@
       `;
 
       dBreakdownList.innerHTML = rows + totalRow;
+
+      // Event listener for decreasing expenditure amount
+      dBreakdownList.querySelectorAll('.btn-decrease-amt').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const expId = btn.dataset.expId;
+          const forPersonName = btn.dataset.person;
+          const exp = expenses.find(x => x.id === expId);
+          if (!exp) return;
+
+          const currentAmt = exp.amount;
+          const isSplit = exp.spentFor && exp.spentFor.length > 1;
+          const shareText = isSplit ? ` (share: ₹${(exp.amount / exp.spentFor.length).toFixed(2)})` : '';
+          const inputVal = prompt(`Decrease amount for "${exp.description || 'Expense'}" (Current total: ₹${currentAmt}${shareText}):\nEnter amount to reduce by (₹):`);
+          if (inputVal === null) return;
+
+          const reduceBy = parseFloat(inputVal);
+          if (isNaN(reduceBy) || reduceBy <= 0) {
+            alert('Please enter a valid amount greater than 0.');
+            return;
+          }
+
+          if (reduceBy >= currentAmt) {
+            if (confirm(`Reducing by ₹${reduceBy} will remove this expense completely (Current: ₹${currentAmt}). Proceed?`)) {
+              expenses = expenses.filter(x => x.id !== expId);
+            } else {
+              return;
+            }
+          } else {
+            exp.amount = Math.round((currentAmt - reduceBy) * 100) / 100;
+          }
+
+          save();
+          renderAll();
+          openDetailModal(forPersonName, calculate());
+        });
+      });
     }
 
     openModal(modalPersonDetail);
@@ -570,12 +626,14 @@
     if (!amount || amount <= 0) { amountErr.classList.add('show');   err = true; }
     else                         { amountErr.classList.remove('show'); }
 
-    if (!spentFor.length)       { spentForErr.classList.add('show'); err = true; }
+    // Ensure payer cannot pay or borrow for themselves in Borrow Amount
+    const filteredSpentFor = spentFor.filter(p => p !== spentBy);
+    if (!filteredSpentFor.length) { spentForErr.classList.add('show'); err = true; }
     else                         { spentForErr.classList.remove('show'); }
 
     if (err) return;
 
-    expenses.push({ id: genId(), spentBy, amount, spentFor, description, date, createdAt: Date.now() });
+    expenses.push({ id: genId(), spentBy, amount, spentFor: filteredSpentFor, description, date, createdAt: Date.now() });
     save();
     renderAll();
     resetForm();
@@ -591,6 +649,9 @@
       const r = c.querySelector('input');
       if (r) r.checked = false;
     });
+
+    // Re-render checkboxes with all people eligible again
+    renderIndividualCheckboxes();
 
     // Uncheck Everyone + individual checkboxes
     chkEveryone.checked = false;

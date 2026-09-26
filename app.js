@@ -175,6 +175,9 @@
   // Admin password used to protect Add Person / Delete Person / Clear All / Undo / Redo
   const ADMIN_PASSWORD = 'mingutha';
 
+  // Sentinel value for the "Everyone" option in the Decrease Borrow dropdown
+  const EVERYONE_VALUE = '__EVERYONE__';
+
   // Per-person redo stack for undo/redo (persisted to localStorage)
   let redoStacks = {};
 
@@ -182,6 +185,10 @@
   let globalUndoStack = [];
   let globalRedoStack = [];
   const GLOBAL_HISTORY_LIMIT = 50;
+
+  // Tracks which Spend Amount person cards are open, so re-rendering (e.g. after adding
+  // a quick self-spend) doesn't collapse a card the person currently has open.
+  let expandedPersonCards = new Set();
 
   // ─── UTILS ───────────────────────────────────────────────────────────────────
   const fmtINR = v => {
@@ -925,6 +932,33 @@
     // ── Tree toggle: tap the name row to open/close this person's box
     wireTreeToggles(personCards, 'pcard-toggle', 'pcard-body');
 
+    // ── Restore any cards that were already open before this re-render (e.g. right
+    //    after adding a quick self-spend), so the panel doesn't appear to "vanish".
+    personCards.querySelectorAll('[data-tree-item]').forEach(item => {
+      const person = item.dataset.person;
+      if (!expandedPersonCards.has(person)) return;
+      const body = item.querySelector('.pcard-body');
+      const toggle = item.querySelector('.pcard-toggle');
+      const chevron = toggle && toggle.querySelector('.tree-chevron');
+      if (body) body.removeAttribute('hidden');
+      if (toggle) toggle.setAttribute('aria-expanded', 'true');
+      if (chevron) chevron.classList.add('open');
+    });
+
+    // ── Keep expandedPersonCards in sync whenever a card is toggled open/closed
+    personCards.querySelectorAll('.pcard-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = btn.closest('[data-tree-item]');
+        if (!item) return;
+        const person = item.dataset.person;
+        const body = item.querySelector('.pcard-body');
+        // wireTreeToggles' own listener (attached above, so it runs first) has
+        // already flipped the hidden attribute by the time this listener runs.
+        if (body && !body.hasAttribute('hidden')) expandedPersonCards.add(person);
+        else expandedPersonCards.delete(person);
+      });
+    });
+
     // ── Quick Spend: submit via Enter or button click
     personCards.querySelectorAll('.quick-spend-form').forEach(form => {
       const person = form.dataset.person;
@@ -1352,11 +1386,16 @@
     if (decBorrowPayerSel && isMulti) {
       const perHead = exp.amount; // each person owes exp.amount
       decBorrowPayerSel.innerHTML = '<option value="">-- Select person --</option>' +
+        `<option value="${EVERYONE_VALUE}">Everyone (settle all ${beneficiaries.length}, ${fmtINR(totalBorrowAmt)} total)</option>` +
         beneficiaries.map(p => `<option value="${p}">${p} (owes ${fmtINR(perHead)})</option>`).join('');
       decBorrowPayerSel.value = '';
-      // Pre-fill amount with per-head share when person is selected
+      // Pre-fill amount with per-head share when person is selected, or the full total for Everyone
       decBorrowPayerSel.onchange = () => {
-        if (decBorrowPayerSel.value) {
+        if (decBorrowPayerSel.value === EVERYONE_VALUE) {
+          decBorrowAmtInp.value = totalBorrowAmt;
+          decBorrowRemainingAmt.textContent = fmtINR(0);
+          if (decBorrowPerHeadHint) decBorrowPerHeadHint.textContent = `This settles the full borrow (${fmtINR(totalBorrowAmt)}) for everyone at once.`;
+        } else if (decBorrowPayerSel.value) {
           decBorrowAmtInp.value = perHead;
           decBorrowRemainingAmt.textContent = fmtINR(Math.max(0, totalBorrowAmt - perHead));
           if (decBorrowPerHeadHint) decBorrowPerHeadHint.textContent = `Amount owed: ${fmtINR(perHead)}`;
@@ -1412,7 +1451,15 @@
       }
 
       pushUndoSnapshot();
-      if (isMulti && selectedPerson) {
+      if (isMulti && selectedPerson === EVERYONE_VALUE) {
+        const ok = await uiConfirm(
+          'Settle Borrow for Everyone?',
+          `This will mark the borrow as fully paid back by all ${beneficiaries.length} people (${fmtINR(exp.isBorrow ? exp.amount * beneficiaries.length : exp.amount)} total) and remove it.\n\nProceed?`,
+          { icon: '🗑️', confirmLabel: 'Yes, Settle All', type: 'danger' }
+        );
+        if (!ok) { globalUndoStack.pop(); persistGlobalHistory(); updateUndoRedoBadges(); return; }
+        expenses = expenses.filter(x => x.id !== expId);
+      } else if (isMulti && selectedPerson) {
         const newSpentFor = exp.spentFor.filter(p => p !== selectedPerson);
         if (newSpentFor.length === 0) {
           expenses = expenses.filter(x => x.id !== expId);
@@ -1645,6 +1692,7 @@
       !(Array.isArray(ex.spentFor) && ex.spentFor.includes(name))
     );
     delete redoStacks[name];
+    expandedPersonCards.delete(name);
     save();
     renderAll();
   });
@@ -1777,6 +1825,7 @@
     if (pwd === ADMIN_PASSWORD) {
       pushUndoSnapshot();
       people = []; expenses = []; customAvg = null; redoStacks = {}; defaultAllSpends = [];
+      expandedPersonCards = new Set();
       localStorage.clear();
       save();
       persistGlobalHistory();

@@ -762,25 +762,6 @@ borrowForm { display: flex; flex-direction: column; gap: 18px; }
   font-size: .8125rem; color: var(--muted); flex-wrap: wrap; gap: 12px;
 }
 
-/* ---- BULK PERSONAL SPEND MODAL ---- */
-.bulk-row {
-  display: flex; flex-direction: column; gap: 6px;
-  padding: 10px 12px; border: 1px solid var(--border);
-  border-radius: var(--r-md); background: var(--subtle);
-}
-.bulk-row-name {
-  display: flex; align-items: center; gap: 8px;
-}
-.bulk-row-label {
-  font-size: .875rem; font-weight: 700; color: var(--text);
-}
-.bulk-row-inputs {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-}
-@media (max-width: 480px) {
-  .bulk-row-inputs { flex-direction: column; align-items: stretch; }
-  .bulk-row-inputs .currency-wrap { width: 100% !important; }
-}
 
 /* ---- RESPONSIVE & MOBILE OPTIMIZATION ---- */
 

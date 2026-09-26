@@ -145,8 +145,10 @@
   const btnBulkSpend      = $('btnBulkSpend');
   const modalBulkSpend    = $('modalBulkSpend');
   const formBulkSpend     = $('formBulkSpend');
-  const bulkSpendRows     = $('bulkSpendRows');
+  const bulkAmount        = $('bulkAmount');
+  const bulkDesc          = $('bulkDesc');
   const bulkSpendDate     = $('bulkSpendDate');
+  const bulkMemberTags    = $('bulkMemberTags');
 
   // Per-person redo stack for undo/redo (persisted to localStorage)
   let redoStacks = {};
@@ -1330,52 +1332,50 @@
         uiAlert('No Members Yet', 'Add some trip members first before recording personal spending.', { icon: 'ℹ️' });
         return;
       }
-      // Populate one row per person
-      bulkSpendRows.innerHTML = people.map(p => `
-        <div class="bulk-row">
-          <div class="bulk-row-name">
-            <div class="avatar" style="width:26px;height:26px;font-size:.65rem;flex-shrink:0;background:var(--blue);color:#fff">${initials(p)}</div>
-            <span class="bulk-row-label">${p}</span>
-          </div>
-          <div class="bulk-row-inputs">
-            <div class="currency-wrap" style="width:110px;flex-shrink:0;">
-              <span class="currency-sym">₹</span>
-              <input type="number" class="form-input bulk-amt" data-person="${p}" placeholder="0" min="0" step="any" style="padding-left:28px;font-size:.875rem;" />
-            </div>
-            <input type="text" class="form-input bulk-desc" data-person="${p}" placeholder="What for? (optional)" style="font-size:.875rem;flex:1;min-width:0;" />
-          </div>
-        </div>
-      `).join('');
-      bulkSpendDate.value = today();
+      if (bulkMemberTags) {
+        bulkMemberTags.innerHTML = people.map(p => `<span class="pill">${p}</span>`).join('');
+      }
+      if (bulkAmount) bulkAmount.value = '';
+      if (bulkDesc)   bulkDesc.value = '';
+      if (bulkSpendDate) bulkSpendDate.value = today();
       openModal(modalBulkSpend);
-      // Focus first amount input
-      const firstAmt = bulkSpendRows.querySelector('.bulk-amt');
-      if (firstAmt) setTimeout(() => firstAmt.focus(), 80);
+      if (bulkAmount) setTimeout(() => bulkAmount.focus(), 80);
     });
   }
 
   if (formBulkSpend) {
     formBulkSpend.addEventListener('submit', async e => {
       e.preventDefault();
-      const date = bulkSpendDate.value || today();
-      let added = 0;
-      people.forEach(p => {
-        const amtInp  = bulkSpendRows.querySelector(`.bulk-amt[data-person="${p}"]`);
-        const descInp = bulkSpendRows.querySelector(`.bulk-desc[data-person="${p}"]`);
-        const amount  = parseFloat(amtInp ? amtInp.value : '');
-        if (!amount || amount <= 0) return; // skip blank rows
-        expenses.push({
-          id: genId(), spentBy: p, amount,
-          spentFor: [p],
-          description: (descInp ? descInp.value.trim() : '') || 'Personal spend',
-          date, isSelfSpend: true, createdAt: Date.now()
-        });
-        added++;
-      });
-      if (!added) {
-        await uiAlert('Nothing Added', 'Please enter an amount for at least one person.', { icon: 'ℹ️' });
+      const amount = parseFloat(bulkAmount.value);
+      const desc   = bulkDesc.value.trim();
+      const date   = bulkSpendDate.value || today();
+
+      if (!amount || amount <= 0) {
+        await uiAlert('Invalid Amount', 'Please enter a valid amount greater than 0.', { icon: '⚠️', type: 'danger' });
+        bulkAmount.focus();
         return;
       }
+
+      if (!desc) {
+        await uiAlert('Missing Reason', 'Please enter a reason or description for this spending.', { icon: '⚠️' });
+        bulkDesc.focus();
+        return;
+      }
+
+      // Add the exact personal spend for each trip member
+      people.forEach(p => {
+        expenses.push({
+          id: genId(),
+          spentBy: p,
+          amount,
+          spentFor: [p],
+          description: desc,
+          date,
+          isSelfSpend: true,
+          createdAt: Date.now()
+        });
+      });
+
       save();
       closeModal(modalBulkSpend);
       renderAll();
@@ -1405,6 +1405,11 @@
     renderAll();
     // Don't reset form on init - just ensure it's in clean state
     renderIndividualCheckboxes();
+
+    // Register Service Worker for offline capability
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

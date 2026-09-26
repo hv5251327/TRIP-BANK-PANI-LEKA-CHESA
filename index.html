@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TRIP BANK</title>
   <link rel="icon" type="image/png" href="logo.png" />
+  <link rel="manifest" href="manifest.json" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
@@ -460,25 +461,42 @@
 
   <!-- MODAL: BULK PERSONAL SPEND (Add for All) -->
   <div class="modal-bg" id="modalBulkSpend" role="dialog" aria-modal="true" aria-hidden="true">
-    <div class="modal modal-lg">
+    <div class="modal">
       <div class="modal-hd">
-        <h3>⚡ Add Personal Spending for All</h3>
+        <h3>⚡ Add Personal Spend for All</h3>
         <button class="modal-x" data-close="modalBulkSpend">✕</button>
       </div>
       <form id="formBulkSpend">
         <div class="modal-bd">
-          <p style="font-size:.82rem;color:var(--muted);margin:0 0 4px;">Enter each person's personal spending. Leave blank to skip.</p>
-          <div id="bulkSpendRows" style="display:flex;flex-direction:column;gap:10px;margin-top:8px;">
-            <!-- Populated via JavaScript -->
+          <div class="decrease-info-card">
+            <div>
+              <span class="dinfo-label">Applies to all trip members</span>
+              <div class="member-pills" id="bulkMemberTags" style="margin-top:4px;"></div>
+            </div>
           </div>
-          <div style="margin-top:8px;">
+
+          <div class="form-group">
+            <label class="form-label required" for="bulkAmount">Amount (₹) for Each Person</label>
+            <div class="currency-wrap">
+              <span class="currency-sym">₹</span>
+              <input type="number" id="bulkAmount" class="form-input form-input-lg" placeholder="0" min="1" step="any" required />
+            </div>
+            <div style="font-size:.75rem;color:var(--muted);margin-top:2px;">This exact amount will be added as personal spending for everyone.</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label required" for="bulkDesc">Reason / Description</label>
+            <input type="text" id="bulkDesc" class="form-input" placeholder="e.g. Entry ticket, Ice cream, Coffee..." maxlength="80" required />
+          </div>
+
+          <div class="form-group">
             <label class="form-label" for="bulkSpendDate">Date</label>
             <input type="date" id="bulkSpendDate" class="form-input" />
           </div>
         </div>
         <div class="modal-ft">
           <button type="button" class="btn btn-secondary" data-close="modalBulkSpend">Cancel</button>
-          <button type="submit" class="btn btn-primary">✓ Save All Spendings</button>
+          <button type="submit" class="btn btn-primary">✓ Add for All</button>
         </div>
       </form>
     </div>

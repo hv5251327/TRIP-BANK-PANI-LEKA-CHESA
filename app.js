@@ -5,6 +5,9 @@
  * - No pairwise Give/Receive section
  * - Spend Amount = shows what was spent FOR each person with who paid below each entry
  * - Form fully resets after every submission (no persistent spender)
+ * - Names shown alphabetically everywhere a list of people appears
+ * - Spend Amount cards & Settlement rows are collapsible "tree" items:
+ *   only the name(s) show until tapped, then the box opens to reveal details
  */
 (function () {
   'use strict';
@@ -209,6 +212,10 @@
     return new Date(y, m-1, d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   };
 
+  // Alphabetical helpers — used everywhere a list of names is rendered
+  const sortNames    = arr => [...(arr || [])].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  const sortedPeople = () => sortNames(people);
+
   // ─── SERVER SYNC ─────────────────────────────────────────────────────────────
   let _lastServerSnapshot = '';   // JSON string of last data from server
   let _syncing = false;
@@ -390,6 +397,32 @@
     return false;
   }
 
+  /**
+   * Generic accordion/tree toggle: wires up every `.${toggleClass}` inside `root`
+   * to show/hide its sibling `.${bodyClass}` and flip its chevron.
+   */
+  function wireTreeToggles(root, toggleClass, bodyClass) {
+    if (!root) return;
+    root.querySelectorAll('.' + toggleClass).forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = btn.closest('[data-tree-item]') || btn.parentElement;
+        const body = item.querySelector('.' + bodyClass);
+        const chevron = btn.querySelector('.tree-chevron');
+        if (!body) return;
+        const isOpen = !body.hasAttribute('hidden');
+        if (isOpen) {
+          body.setAttribute('hidden', '');
+          btn.setAttribute('aria-expanded', 'false');
+          if (chevron) chevron.classList.remove('open');
+        } else {
+          body.removeAttribute('hidden');
+          btn.setAttribute('aria-expanded', 'true');
+          if (chevron) chevron.classList.add('open');
+        }
+      });
+    });
+  }
+
   // ─── CALCULATIONS ────────────────────────────────────────────────────────────
   /**
    * Returns per-person stats and optimal settlement transactions.
@@ -403,7 +436,7 @@
    *   expensesForPerson[person] = [ { desc, date, share, paidBy }, ... ]
    */
   function calculate() {
-    // totalSpend: for borrows, payer paid full amount FOR EACH beneficiary, plus themselves (cnt + 1)
+    // totalSpend: for borrows, payer paid full amount FOR EACH beneficiary
     const totalSpend = expenses.reduce((s, e) => {
       const amount = Number(e.amount) || 0;
       const cnt = Array.isArray(e.spentFor) ? e.spentFor.length : 1;
@@ -551,7 +584,7 @@
   function renderAll() {
     const data = calculate();
     renderTopMetrics(data);
-    renderSpenderOptions(spenderGrid, getSelectedSpender(spenderGrid), people);
+    renderSpenderOptions(spenderGrid, getSelectedSpender(spenderGrid), sortedPeople());
     renderIndividualCheckboxes();
     renderPersonCards(data);
     renderBorrowRecords(data);
@@ -565,15 +598,15 @@
     elPeopleCount.textContent  = people.length;
 
     elAvgPerPerson.innerHTML = `${fmtINR(autoAvg)} <span class="per-person">/ person</span>`;
-    elAvgFormula.textContent = 'Total ÷ (People − 1)';
+    elAvgFormula.textContent = 'Total ÷ People';
 
-    // Member pills
-    elMemberPills.innerHTML = people.map(p => `<span class="pill">${p}</span>`).join('');
+    // Member pills (alphabetical)
+    elMemberPills.innerHTML = sortedPeople().map(p => `<span class="pill">${p}</span>`).join('');
 
-    // Existing members hint in modal (with delete button per person)
+    // Existing members hint in modal (with delete button per person), alphabetical
     if (existingMembers) {
       existingMembers.innerHTML = people.length
-        ? 'Current members: ' + people.map(p => `<span class="pill">${p} <button type="button" class="pill-del" data-name="${p}" title="Remove ${p}">×</button></span>`).join('')
+        ? 'Current members: ' + sortedPeople().map(p => `<span class="pill">${p} <button type="button" class="pill-del" data-name="${p}" title="Remove ${p}">×</button></span>`).join('')
         : '<span style="color:var(--light)">No members yet</span>';
     }
   }
@@ -615,8 +648,8 @@
   // ─── INDIVIDUAL CHECKBOXES ───────────────────────────────────────────────────
   function renderIndividualCheckboxes() {
     const payer = getSelectedSpender(spenderGrid);
-    // Exclude payer from Borrow Amount: no option to pay or borrow for themselves!
-    const eligiblePeople = payer ? people.filter(p => p !== payer) : people;
+    // Exclude payer from Borrow Amount: no option to pay or borrow for themselves! (alphabetical)
+    const eligiblePeople = payer ? sortedPeople().filter(p => p !== payer) : sortedPeople();
 
     if (!people.length) {
       individualChks.innerHTML = '<div class="empty-hint">Add people to see them here.</div>';
@@ -671,13 +704,13 @@
     if (chkEveryone.checked) spentForErr.classList.remove('show');
   });
 
-  // ─── SPEND AMOUNT CARDS ──────────────────────────────────────────────────────
+  // ─── SPEND AMOUNT CARDS (collapsible "tree" — name only until tapped) ─────────
   /**
-   * Each person's card shows:
-   *  - Name + inline quick-spend input + Balance chip at top
-   *  - List of expenses paid FOR them (description, who paid below each entry)
-   *  - Total share at bottom
-   *  - "View full breakdown →" link
+   * Each person's card is a collapsible tree item:
+   *  - Collapsed: shows ONLY the avatar + name (tap to open)
+   *  - Expanded (tapped open): reveals the existing full content —
+   *    balance chip, inline quick-spend input, list of expenses paid FOR them,
+   *    total share, and "View full breakdown →" link — exactly as before.
    */
   function renderPersonCards({ stats, forPerson }) {
     if (!people.length) {
@@ -689,7 +722,7 @@
       return;
     }
 
-    personCards.innerHTML = people.map(person => {
+    personCards.innerHTML = sortedPeople().map(person => {
       const stat    = stats[person] || { totalPaid: 0, share: 0, balance: 0 };
       const exps    = forPerson[person] || [];
       const balance = stat.balance;
@@ -713,64 +746,73 @@
         : `<div class="pcard-no-expenses">No expenses recorded for ${person} yet.</div>`;
 
       return `
-        <div class="pcard">
-          <div class="pcard-header">
-            <div class="pcard-person">
+        <div class="pcard" data-tree-item data-person="${person}">
+          <button type="button" class="pcard-toggle" aria-expanded="false">
+            <span class="pcard-toggle-left">
+              <span class="tree-chevron">▸</span>
               <div class="avatar">${initials(person)}</div>
               <span class="pcard-name">${person}</span>
-            </div>
-            <span class="pcard-balance-chip ${chipClass}">${chipText}</span>
-          </div>
+            </span>
+          </button>
 
-          <!-- Self spend row below name in a row -->
-          <div class="pcard-self-spend-row">
-            <form class="quick-spend-form" data-person="${person}">
-              <div class="qs-amt-wrap">
-                <span class="qs-sym">₹</span>
+          <div class="pcard-body" hidden>
+            <div class="pcard-header">
+              <span class="pcard-balance-chip ${chipClass}">${chipText}</span>
+            </div>
+
+            <!-- Self spend row below name in a row -->
+            <div class="pcard-self-spend-row">
+              <form class="quick-spend-form" data-person="${person}">
+                <div class="qs-amt-wrap">
+                  <span class="qs-sym">₹</span>
+                  <input
+                    type="number"
+                    class="qs-amt-input"
+                    placeholder="Amount"
+                    min="1"
+                    step="any"
+                    required
+                    title="Amount spent by ${person} on themselves"
+                  />
+                </div>
                 <input
-                  type="number"
-                  class="qs-amt-input"
-                  placeholder="Amount"
-                  min="1"
-                  step="any"
-                  required
-                  title="Amount spent by ${person} on themselves"
+                  type="text"
+                  class="qs-desc-input"
+                  placeholder="Why? (e.g. Snacks, Tea)"
+                  maxlength="40"
+                  title="Description / why"
                 />
+                <button type="submit" class="qs-btn" title="Add self spend">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                  Add
+                </button>
+              </form>
+              <div class="pcard-undo-redo">
+                <button type="button" class="btn-undo-person" data-person="${person}" title="Undo previous self-spending for ${person}">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+                  Undo
+                </button>
+                <button type="button" class="btn-redo-person" data-person="${person}" title="Redo previous undone spending for ${person}">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></svg>
+                  Redo
+                </button>
               </div>
-              <input
-                type="text"
-                class="qs-desc-input"
-                placeholder="Why? (e.g. Snacks, Tea)"
-                maxlength="40"
-                title="Description / why"
-              />
-              <button type="submit" class="qs-btn" title="Add self spend">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                Add
-              </button>
-            </form>
-            <div class="pcard-undo-redo">
-              <button type="button" class="btn-undo-person" data-person="${person}" title="Undo previous self-spending for ${person}">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
-                Undo
-              </button>
-              <button type="button" class="btn-redo-person" data-person="${person}" title="Redo previous undone spending for ${person}">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></svg>
-                Redo
-              </button>
             </div>
+
+            ${expRows}
+
+            <div class="pcard-total">
+              <span class="pcard-total-label">Total Share for ${person}</span>
+              <span class="pcard-total-amt">${fmtINR(stat.share)}</span>
+            </div>
+
+            <button class="view-details" data-person="${person}">View full breakdown →</button>
           </div>
-
-          ${expRows}
-
-          <div class="pcard-total">
-            <span class="pcard-total-label">Total Share for ${person}</span>
-            <span class="pcard-total-amt">${fmtINR(stat.share)}</span>
-          </div>
-
-          <button class="view-details" data-person="${person}">View full breakdown →</button>
         </div>`;
     }).join('');
+
+    // ── Tree toggle: tap the name row to open/close this person's box
+    wireTreeToggles(personCards, 'pcard-toggle', 'pcard-body');
 
     // ── Quick Spend: submit via Enter or button click
     personCards.querySelectorAll('.quick-spend-form').forEach(form => {
@@ -870,38 +912,48 @@
     });
   }
 
-  // ─── SETTLEMENT ──────────────────────────────────────────────────────────────
+  // ─── SETTLEMENT (collapsible "tree" — names only until tapped) ────────────────
   function renderSettlement({ transactions, pairwiseTransactions }) {
+    // Alphabetical ordering of the names shown in each row (by "from" then "to")
+    const byNames = arr => [...arr].sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to));
+
     const buildListHtml = (items, emptyMsg) => {
       if (!items || !items.length) {
         return `<div class="settle-empty">${emptyMsg}</div>`;
       }
-      return items.map(t => `
-        <div class="settle-item">
-          <div class="settle-flow">
-            <div class="settle-party">
-              <div class="avatar" style="width:24px;height:24px;font-size:.6rem">${initials(t.from)}</div>
-              ${t.from}
-            </div>
-            <div class="settle-arrow">
-              <span>pays</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-            </div>
-            <div class="settle-party">
-              <div class="avatar" style="width:24px;height:24px;font-size:.6rem;background:var(--blue);color:#fff">${initials(t.to)}</div>
-              ${t.to}
-            </div>
+      return byNames(items).map(t => `
+        <div class="settle-item" data-tree-item>
+          <button type="button" class="settle-toggle" aria-expanded="false">
+            <span class="tree-chevron">▸</span>
+            <span class="settle-toggle-flow">
+              <span class="settle-party">
+                <div class="avatar" style="width:24px;height:24px;font-size:.6rem">${initials(t.from)}</div>
+                ${t.from}
+              </span>
+              <span class="settle-arrow">
+                <span>pays</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </span>
+              <span class="settle-party">
+                <div class="avatar" style="width:24px;height:24px;font-size:.6rem;background:var(--blue);color:#fff">${initials(t.to)}</div>
+                ${t.to}
+              </span>
+            </span>
+          </button>
+          <div class="settle-body" hidden>
+            <span class="settle-amount">${fmtINR(t.amount)}</span>
           </div>
-          <span class="settle-amount">${fmtINR(t.amount)}</span>
         </div>
       `).join('');
     };
 
     if (oneToOneSettlementList) {
       oneToOneSettlementList.innerHTML = buildListHtml(pairwiseTransactions, 'No 1-to-1 payments needed – all even!');
+      wireTreeToggles(oneToOneSettlementList, 'settle-toggle', 'settle-body');
     }
     if (settlementList) {
       settlementList.innerHTML = buildListHtml(transactions, 'All settled up once you add expenses.');
+      wireTreeToggles(settlementList, 'settle-toggle', 'settle-body');
     }
   }
 
@@ -1127,7 +1179,7 @@
           <span class="borrow-card-amt">${fmtINR(totalBorrowAmt)}</span>
         </div>
         <div class="borrow-card-mid">
-          <div>For: <strong>${(e.spentFor || []).join(', ')}</strong>${isMulti && e.isBorrow ? ` (${fmtINR(e.amount)} each)` : ''}</div>
+          <div>For: <strong>${sortNames(e.spentFor).join(', ')}</strong>${isMulti && e.isBorrow ? ` (${fmtINR(e.amount)} each)` : ''}</div>
           <span class="borrow-desc-tag">${e.description || 'Borrow'}</span>
           <span>${fmtDate(e.date)}</span>
         </div>
@@ -1157,7 +1209,7 @@
     const exp = expenses.find(x => x.id === expId);
     if (!exp) return;
 
-    const beneficiaries = exp.spentFor || [];
+    const beneficiaries = sortNames(exp.spentFor || []);
     const isMulti = beneficiaries.length > 1;
     const totalBorrowAmt = exp.isBorrow ? (exp.amount * beneficiaries.length) : exp.amount;
 
@@ -1518,12 +1570,12 @@
     editDesc.value = exp.description || '';
     editDate.value = exp.date || today();
 
-    renderSpenderOptions(editSpenderGrid, exp.spentBy, people);
+    renderSpenderOptions(editSpenderGrid, exp.spentBy, sortedPeople());
 
     const isAll = exp.spentFor && exp.spentFor.length === people.length;
     editChkAll.checked = isAll;
 
-    editIndChks.innerHTML = people.map(p => `
+    editIndChks.innerHTML = sortedPeople().map(p => `
       <label class="chk-item">
         <input type="checkbox" name="editSpentFor" value="${p}" ${exp.spentFor && exp.spentFor.includes(p) ? 'checked' : ''} />
         <span class="chk-box"></span>
@@ -1641,7 +1693,7 @@
     btnBulkSpend.addEventListener('click', () => {
       if (bulkMemberTags) {
         bulkMemberTags.innerHTML = people.length
-          ? people.map(p => `<span class="pill">${p}</span>`).join('')
+          ? sortedPeople().map(p => `<span class="pill">${p}</span>`).join('')
           : '<span style="color:var(--light)">No members yet. Will apply to new registers.</span>';
       }
       if (bulkAmount) bulkAmount.value = '';

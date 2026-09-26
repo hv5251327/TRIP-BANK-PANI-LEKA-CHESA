@@ -81,6 +81,15 @@ body {
   box-shadow: 0 4px 12px rgba(37,99,235,.3);
 }
 
+.brand-logo-img {
+  width: 46px; height: 46px;
+  border-radius: var(--r-md);
+  object-fit: contain;
+  background: #ffffff;
+  border: 1.5px solid var(--border);
+  box-shadow: 0 4px 10px rgba(0,0,0,.08);
+}
+
 .header-brand h1 { font-size: 1.4rem; font-weight: 800; letter-spacing: -.025em; }
 .tagline { font-size: .8125rem; color: var(--muted); }
 
@@ -426,6 +435,18 @@ borrowForm { display: flex; flex-direction: column; gap: 18px; }
 }
 .qs-btn:hover { background: var(--blue-h); }
 .qs-btn.qs-ok { background: var(--green); }
+
+.btn-undo-person {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--subtle); border: 1.5px solid var(--border);
+  color: var(--muted); font-family: var(--font);
+  font-size: .72rem; font-weight: 600;
+  padding: 5px 9px; border-radius: var(--r-sm);
+  cursor: pointer; transition: var(--tr); white-space: nowrap;
+}
+.btn-undo-person:hover {
+  background: #e2e8f0; color: var(--text); border-color: var(--bord2);
+}
 
 .pcard-balance-chip {
   font-size: .78rem; font-weight: 700;

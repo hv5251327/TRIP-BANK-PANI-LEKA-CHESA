@@ -411,6 +411,10 @@
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
                 </button>
               </form>
+              <button type="button" class="btn-undo-person" data-person="${person}" title="Undo previous spending for ${person}">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+                Undo
+              </button>
               <span class="pcard-balance-chip ${chipClass}">${chipText}</span>
             </div>
           </div>
@@ -461,6 +465,32 @@
 
       // Prevent card click bubbling when clicking inside quick-spend form
       form.addEventListener('click', e => e.stopPropagation());
+    });
+
+    // ── Undo previous spending for this person
+    personCards.querySelectorAll('.btn-undo-person').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const person = btn.dataset.person;
+        // Find latest expense involving this person (paid by them or spent for them)
+        let targetIdx = -1;
+        for (let i = expenses.length - 1; i >= 0; i--) {
+          const exp = expenses[i];
+          if (exp.spentBy === person || (exp.spentFor && exp.spentFor.includes(person))) {
+            targetIdx = i;
+            break;
+          }
+        }
+
+        if (targetIdx === -1) {
+          alert(`No previous spendings found to undo for ${person}.`);
+          return;
+        }
+
+        expenses.splice(targetIdx, 1);
+        save();
+        renderAll();
+      });
     });
 
     // ── Detail modal: ONLY opens when explicitly clicking "View full breakdown →"
@@ -814,11 +844,19 @@
   });
 
   btnClearAll.addEventListener('click', () => {
-    if (confirm('Clear all trip members and expenses? This cannot be undone.')) {
-      people = []; expenses = []; customAvg = null;
+    const pwd = prompt('Enter password to clear and reset all data in site:');
+    if (pwd === null) return; // User pressed Cancel
+    if (pwd === 'mingutha') {
+      people = [];
+      expenses = [];
+      customAvg = null;
+      localStorage.clear();
       save();
       renderAll();
       resetForm();
+      alert('All site data has been reset and cleared successfully!');
+    } else {
+      alert('Incorrect password! Data was not cleared.');
     }
   });
 

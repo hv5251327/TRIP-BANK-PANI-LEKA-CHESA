@@ -383,8 +383,12 @@
    *   expensesForPerson[person] = [ { desc, date, share, paidBy }, ... ]
    */
   function calculate() {
-    // totalSpend = all expenses across the trip
-    const totalSpend = expenses.reduce((s, e) => s + (Number(e.amount)||0), 0);
+    // totalSpend: for borrows, payer paid full amount FOR EACH beneficiary
+    const totalSpend = expenses.reduce((s, e) => {
+      const amount = Number(e.amount) || 0;
+      const cnt = Array.isArray(e.spentFor) ? e.spentFor.length : 1;
+      return s + (e.isBorrow ? amount * cnt : amount);
+    }, 0);
     const n = people.length;
     const autoAvg = n > 0 ? (totalSpend / n) : 0;
 
@@ -403,26 +407,44 @@
       const cnt    = bens.length;
       if (!cnt) return;
 
-      // Bug 5 fix: round perHead to 2 decimal places to avoid floating-point drift
-      const perHead = Math.round(amount / cnt * 100) / 100;
+      if (exp.isBorrow) {
+        // ── BORROW: the entered amount is what EACH beneficiary owes to the payer.
+        //    Payer gets credit for amount × number of borrowers.
+        if (stats[payer]) stats[payer].totalPaid += amount * cnt;
 
-      // Credit payer
-      if (stats[payer]) stats[payer].totalPaid += amount;
-
-      // Debit each beneficiary
-      bens.forEach(b => {
-        if (!stats[b]) return;
-        stats[b].share += perHead;
-        forPerson[b].push({
-          id:      exp.id,
-          desc:    exp.description || 'Expense',
-          date:    exp.date,
-          share:   perHead,
-          paidBy:  payer,
-          amount:  amount,
-          spentFor: exp.spentFor
+        bens.forEach(b => {
+          if (!stats[b]) return;
+          stats[b].share += amount;          // each person owes the FULL amount
+          forPerson[b].push({
+            id:       exp.id,
+            desc:     exp.description || 'Borrow',
+            date:     exp.date,
+            share:    amount,                // full amount per person
+            paidBy:   payer,
+            amount:   amount,
+            spentFor: exp.spentFor
+          });
         });
-      });
+      } else {
+        // ── REGULAR / SELF-SPEND: split evenly among beneficiaries
+        const perHead = Math.round(amount / cnt * 100) / 100;
+
+        if (stats[payer]) stats[payer].totalPaid += amount;
+
+        bens.forEach(b => {
+          if (!stats[b]) return;
+          stats[b].share += perHead;
+          forPerson[b].push({
+            id:       exp.id,
+            desc:     exp.description || 'Expense',
+            date:     exp.date,
+            share:    perHead,
+            paidBy:   payer,
+            amount:   amount,
+            spentFor: exp.spentFor
+          });
+        });
+      }
     });
 
     // Compute balances
@@ -860,7 +882,7 @@
               <span class="bkrow-desc">${e.desc}</span>
               <span class="bkrow-meta">
                 Paid by <strong>${e.paidBy}</strong> • 
-                ${e.spentFor && e.spentFor.length > 1 ? `Split ${e.spentFor.length} ways (₹${(e.amount/e.spentFor.length).toFixed(2)} each)` : 'Self spend'} •
+                ${e.isBorrow ? `Borrow (${fmtINR(e.share)})` : (e.spentFor && e.spentFor.length > 1 ? `Split ${e.spentFor.length} ways (${fmtINR(e.share)} each)` : 'Self spend')} •
                 ${fmtDate(e.date)}
               </span>
             </div>
@@ -1000,6 +1022,9 @@
         !transactions.some(t => t.from === person && t.to === e.spentBy)
       );
 
+      const totalBorrowAmt = e.isBorrow ? (e.amount * (e.spentFor && e.spentFor.length ? e.spentFor.length : 1)) : e.amount;
+      const isMulti = e.spentFor && e.spentFor.length > 1;
+
       return `
       <div class="borrow-card ${isSettled ? 'borrow-card--settled' : ''}">
         <div class="borrow-card-top">
@@ -1007,10 +1032,10 @@
             <div class="avatar" style="width:24px;height:24px;font-size:.65rem">${initials(e.spentBy)}</div>
             <span><strong>${e.spentBy}</strong> paid</span>
           </div>
-          <span class="borrow-card-amt">${fmtINR(e.amount)}</span>
+          <span class="borrow-card-amt">${fmtINR(totalBorrowAmt)}</span>
         </div>
         <div class="borrow-card-mid">
-          <div>For: <strong>${(e.spentFor || []).join(', ')}</strong></div>
+          <div>For: <strong>${(e.spentFor || []).join(', ')}</strong>${isMulti && e.isBorrow ? ` (${fmtINR(e.amount)} each)` : ''}</div>
           <span class="borrow-desc-tag">${e.description || 'Borrow'}</span>
           <span>${fmtDate(e.date)}</span>
         </div>
@@ -1040,24 +1065,26 @@
     const exp = expenses.find(x => x.id === expId);
     if (!exp) return;
 
+    const beneficiaries = exp.spentFor || [];
+    const isMulti = beneficiaries.length > 1;
+    const totalBorrowAmt = exp.isBorrow ? (exp.amount * beneficiaries.length) : exp.amount;
+
     decBorrowExpId.value = exp.id;
     decBorrowDesc.textContent = exp.description || 'Borrow';
-    decBorrowPayer.textContent = `Paid by ${exp.spentBy} for ${(exp.spentFor || []).join(', ')}`;
-    decBorrowCurrentAmt.textContent = fmtINR(exp.amount);
+    decBorrowPayer.textContent = `Paid by ${exp.spentBy} for ${beneficiaries.join(', ')}`;
+    decBorrowCurrentAmt.textContent = fmtINR(totalBorrowAmt);
     decBorrowKeyInp.value = '';
     decBorrowAmtInp.value = '';
     decBorrowAmtInp.max = exp.amount;
-    decBorrowRemainingAmt.textContent = fmtINR(exp.amount);
+    decBorrowRemainingAmt.textContent = fmtINR(totalBorrowAmt);
     decBorrowKeyErr.classList.remove('show');
 
-    // Bug 1 fix: show person selector for multi-beneficiary borrows
-    const beneficiaries = exp.spentFor || [];
-    const isMulti = beneficiaries.length > 1;
+    // Show person selector for multi-beneficiary borrows
     if (decBorrowPersonRow) {
       decBorrowPersonRow.style.display = isMulti ? 'block' : 'none';
     }
     if (decBorrowPayerSel && isMulti) {
-      const perHead = Math.round(exp.amount / beneficiaries.length * 100) / 100;
+      const perHead = exp.amount; // each person owes exp.amount
       decBorrowPayerSel.innerHTML = '<option value="">-- Select person --</option>' +
         beneficiaries.map(p => `<option value="${p}">${p} (owes ${fmtINR(perHead)})</option>`).join('');
       decBorrowPayerSel.value = '';
@@ -1065,8 +1092,8 @@
       decBorrowPayerSel.onchange = () => {
         if (decBorrowPayerSel.value) {
           decBorrowAmtInp.value = perHead;
-          decBorrowRemainingAmt.textContent = fmtINR(Math.max(0, exp.amount - perHead));
-          if (decBorrowPerHeadHint) decBorrowPerHeadHint.textContent = `Share per person: ${fmtINR(perHead)}`;
+          decBorrowRemainingAmt.textContent = fmtINR(Math.max(0, totalBorrowAmt - perHead));
+          if (decBorrowPerHeadHint) decBorrowPerHeadHint.textContent = `Amount owed: ${fmtINR(perHead)}`;
         }
       };
       if (decBorrowPerHeadHint) decBorrowPerHeadHint.textContent = '';
@@ -1081,7 +1108,8 @@
       const exp = expenses.find(x => x.id === decBorrowExpId.value);
       if (!exp) return;
       const reduceVal = parseFloat(decBorrowAmtInp.value) || 0;
-      const remaining = Math.max(0, exp.amount - reduceVal);
+      const totalBorrowAmt = exp.isBorrow ? (exp.amount * (exp.spentFor ? exp.spentFor.length : 1)) : exp.amount;
+      const remaining = Math.max(0, totalBorrowAmt - reduceVal);
       decBorrowRemainingAmt.textContent = fmtINR(remaining);
     });
   }
@@ -1118,13 +1146,11 @@
       }
 
       if (isMulti && selectedPerson) {
-        const perHead = Math.round(exp.amount / beneficiaries.length * 100) / 100;
         const newSpentFor = exp.spentFor.filter(p => p !== selectedPerson);
-        if (newSpentFor.length === 0 || reduceBy >= exp.amount) {
+        if (newSpentFor.length === 0) {
           expenses = expenses.filter(x => x.id !== expId);
         } else {
           exp.spentFor = newSpentFor;
-          exp.amount = Math.round((exp.amount - perHead) * 100) / 100;
         }
       } else {
         if (reduceBy >= exp.amount) {

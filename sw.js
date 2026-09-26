@@ -1,9 +1,9 @@
-const CACHE_NAME = 'trip-bank-v4';
+const CACHE_NAME = 'trip-bank-v5';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
-  './style.css?v=4',
-  './app.js?v=4',
+  './style.css?v=5',
+  './app.js?v=5',
   './logo.png',
   './manifest.json'
 ];

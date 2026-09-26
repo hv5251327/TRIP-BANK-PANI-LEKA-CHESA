@@ -169,17 +169,22 @@
   };
 
   /**
-   * Safely evaluates numbers and division/math expressions (e.g. "16000/8" -> 2000).
+   * Safely evaluates numbers and math expressions with division (/ or ÷) and multiplication (* or × or x)
+   * e.g. "16000/8" -> 2000, "16000÷8" -> 2000, "2000*8" -> 16000, "2000x8" -> 16000
    */
   const evalAmount = val => {
     if (val === null || val === undefined) return NaN;
-    const s = String(val).trim();
+    let s = String(val).trim();
     if (!s) return NaN;
+    // Replace unicode division and multiplication
+    s = s.replace(/÷/g, '/').replace(/×/g, '*');
+    // Replace 'x' or 'X' between digits or after spaces as multiplication
+    s = s.replace(/(\d)\s*[xX]\s*(\d)/g, '$1*$2');
     if (/^\d+(\.\d+)?$/.test(s)) return parseFloat(s);
     if (/^[0-9+\-*/. ()]+$/.test(s)) {
       try {
         const res = Function(`'use strict'; return (${s})`)();
-        if (typeof res === 'number' && !isNaN(res) && isFinite(res)) {
+        if (typeof res === 'number' && !isNaN(res) && isFinite(res) && res > 0) {
           return Math.round(res * 100) / 100;
         }
       } catch {}
@@ -1082,7 +1087,11 @@
     e.preventDefault();
 
     const spentBy     = getSelectedSpender(spenderGrid);
-    const amount      = evalAmount(inpAmount.value);
+    const calc        = evalAmount(inpAmount.value);
+    if (!isNaN(calc) && calc > 0) {
+      inpAmount.value = calc;
+    }
+    const amount      = calc;
     const spentFor    = Array.from(individualChks.querySelectorAll('input:checked')).map(c => c.value);
     const description = inpDesc.value.trim();
     const date        = inpDate.value || today();
@@ -1130,7 +1139,7 @@
   // Live division/math hint for borrow amount (e.g. 16000/8 -> = ₹2,000)
   inpAmount.addEventListener('input', () => {
     const val = inpAmount.value.trim();
-    if (val.includes('/') || val.includes('*') || val.includes('+') || (val.includes('-') && !val.startsWith('-'))) {
+    if (val.includes('/') || val.includes('*') || val.includes('÷') || val.includes('×') || /[xX]/.test(val) || val.includes('+') || (val.includes('-') && !val.startsWith('-'))) {
       const calc = evalAmount(val);
       if (!isNaN(calc) && calc > 0) {
         if (amountCalcHint) {
@@ -1142,6 +1151,18 @@
       }
     } else if (amountCalcHint) {
       amountCalcHint.style.display = 'none';
+    }
+  });
+
+  // Auto-replace expression with calculated number when user leaves the field
+  inpAmount.addEventListener('blur', () => {
+    const val = inpAmount.value.trim();
+    if (val.includes('/') || val.includes('*') || val.includes('÷') || val.includes('×') || /[xX]/.test(val) || val.includes('+')) {
+      const calc = evalAmount(val);
+      if (!isNaN(calc) && calc > 0) {
+        inpAmount.value = calc;
+        if (amountCalcHint) amountCalcHint.style.display = 'none';
+      }
     }
   });
 
@@ -1446,7 +1467,7 @@
   if (bulkAmount) {
     bulkAmount.addEventListener('input', () => {
       const val = bulkAmount.value.trim();
-      if (val.includes('/') || val.includes('*') || val.includes('+') || (val.includes('-') && !val.startsWith('-'))) {
+      if (val.includes('/') || val.includes('*') || val.includes('÷') || val.includes('×') || /[xX]/.test(val) || val.includes('+') || (val.includes('-') && !val.startsWith('-'))) {
         const calc = evalAmount(val);
         if (!isNaN(calc) && calc > 0) {
           if (bulkCalcHint) {
@@ -1458,6 +1479,17 @@
         }
       } else if (bulkCalcHint) {
         bulkCalcHint.style.display = 'none';
+      }
+    });
+
+    bulkAmount.addEventListener('blur', () => {
+      const val = bulkAmount.value.trim();
+      if (val.includes('/') || val.includes('*') || val.includes('÷') || val.includes('×') || /[xX]/.test(val) || val.includes('+')) {
+        const calc = evalAmount(val);
+        if (!isNaN(calc) && calc > 0) {
+          bulkAmount.value = calc;
+          if (bulkCalcHint) bulkCalcHint.style.display = 'none';
+        }
       }
     });
   }

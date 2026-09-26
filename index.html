@@ -10,6 +10,98 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
+  <style>
+    /* ══════════════════════════════════════════════════════════════════
+       ADDED: "navigation tree" collapsible style for Spend Amount cards
+       and Settlement rows — only names show until tapped/clicked open.
+       These rules are additive on top of style.css; nothing else touched.
+       ══════════════════════════════════════════════════════════════════ */
+    .pcard-toggle, .settle-toggle {
+      all: unset;
+      display: flex;
+      align-items: center;
+      width: 100%;
+      cursor: pointer;
+      padding: 10px 4px;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      min-height: 44px;
+    }
+    .pcard-toggle-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .tree-chevron {
+      display: inline-block;
+      flex-shrink: 0;
+      font-size: .8rem;
+      color: var(--muted, #64748b);
+      transition: transform .18s ease;
+    }
+    .tree-chevron.open { transform: rotate(90deg); }
+    .pcard-name {
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .pcard-body, .settle-body {
+      padding: 8px 0 4px 30px;
+      border-left: 2px solid var(--border, #e2e8f0);
+      margin-left: 12px;
+      animation: treeOpen .15s ease;
+    }
+    .pcard-body[hidden], .settle-body[hidden] { display: none; }
+    @keyframes treeOpen {
+      from { opacity: 0; transform: translateY(-4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .settle-item { display: block; }
+    .settle-toggle-flow {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      overflow: hidden;
+      flex-wrap: wrap;
+    }
+    .settle-toggle-flow .settle-party {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .settle-toggle-flow .settle-arrow {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+      opacity: .7;
+      font-size: .78rem;
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       ADDED: Mobile optimisation
+       ══════════════════════════════════════════════════════════════════ */
+    @media (max-width: 640px) {
+      .app-wrapper { padding: 10px !important; }
+      .top-metrics { grid-template-columns: 1fr !important; }
+      .dashboard { grid-template-columns: 1fr !important; }
+      .app-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+      .metric-value { font-size: 1.25rem !important; }
+      .pcard-toggle, .settle-toggle { padding: 12px 6px; }
+      .modal { width: 94vw !important; max-width: 94vw !important; }
+      .quick-spend-form { flex-direction: column; align-items: stretch; }
+      .settle-flow, .settle-toggle-flow { flex-wrap: wrap; }
+      .pcard-body, .settle-body { margin-left: 6px; padding-left: 18px; }
+      .btn-block, .btn-lg { font-size: .95rem; }
+    }
+  </style>
 </head>
 <body>
   <div class="app-wrapper">
@@ -177,7 +269,7 @@
               <span class="live-badge"><span class="pulse"></span> Auto-updated</span>
             </div>
           </div>
-          <p class="panel-desc">What was spent for each person. Use <strong>⚡ Add for All</strong> to log everyone's personal spending in one go.</p>
+          <p class="panel-desc">Tap a name to open their split. Use <strong>⚡ Add for All</strong> to log everyone's personal spending in one go.</p>
 
           <div class="person-cards" id="personCards">
             <div class="empty-state">
@@ -196,7 +288,7 @@
               </div>
               <div>
                 <h3 class="panel-title panel-title--white">Settlement</h3>
-                <p class="panel-desc panel-desc--white">Person on the left pays Person on the right</p>
+                <p class="panel-desc panel-desc--white">Tap a row to reveal the amount</p>
               </div>
             </div>
             <!-- Settlement Mode Tabs -->

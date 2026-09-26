@@ -130,6 +130,16 @@
               <input type="text" id="inpDesc" class="form-input" placeholder="e.g. Dinner, Hotel, Petrol..." maxlength="80" />
             </div>
 
+            <!-- SECRET KEY TO PROTECT/DECREASE BORROW LATER -->
+            <div class="form-group">
+              <label class="form-label required" for="borrowSecretKey">
+                Secret Key
+                <span class="opt">(needed later if you want to decrease this borrow)</span>
+              </label>
+              <input type="password" id="borrowSecretKey" class="form-input" placeholder="Create a secret key for this borrow..." required autocomplete="off" />
+              <div class="field-err" id="secretKeyErr">Please create a secret key for this borrow.</div>
+            </div>
+
             <!-- DATE -->
             <div class="form-group form-group-row">
               <label class="form-label" for="inpDate">Date</label>
@@ -142,6 +152,21 @@
               Add Expense
             </button>
           </form>
+        </div>
+
+        <!-- PREVIOUS BORROWED AMOUNTS BLOCK -->
+        <div class="panel mt-4">
+          <div class="panel-head">
+            <div>
+              <div class="panel-tag">Borrow Records</div>
+              <h3 class="panel-title-sm">Previous Borrowed Amounts</h3>
+            </div>
+            <span class="counter-badge" id="borrowCountBadge">0 records</span>
+          </div>
+          <p class="panel-desc">Previous group borrowings. Type the secret key you created to decrease any amount.</p>
+          <div class="borrow-records-list" id="borrowRecordsList">
+            <!-- Populated via JavaScript -->
+          </div>
         </div>
       </section>
 
@@ -310,6 +335,109 @@
         <div class="modal-ft">
           <button type="button" class="btn btn-secondary" data-close="modalEdit">Cancel</button>
           <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: DECREASE SELF SPEND (Interactive) -->
+  <div class="modal-bg" id="modalDecreaseExpense">
+    <div class="modal">
+      <div class="modal-hd">
+        <h3>Decrease Self Spend</h3>
+        <button class="modal-x" data-close="modalDecreaseExpense">✕</button>
+      </div>
+      <form id="formDecreaseExpense">
+        <input type="hidden" id="decExpId" />
+        <input type="hidden" id="decPersonName" />
+        <div class="modal-bd">
+          <div class="decrease-info-card">
+            <div>
+              <span class="dinfo-label">Expense</span>
+              <strong class="dinfo-val" id="decDesc">Snacks</strong>
+            </div>
+            <div style="text-align: right;">
+              <span class="dinfo-label">Current Amount</span>
+              <strong class="dinfo-amt" id="decCurrentAmt">₹0</strong>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Quick Reduce</label>
+            <div class="quick-chips" id="decQuickChips">
+              <button type="button" class="chip dec-chip" data-reduce="50">- ₹50</button>
+              <button type="button" class="chip dec-chip" data-reduce="100">- ₹100</button>
+              <button type="button" class="chip dec-chip" data-reduce="200">- ₹200</button>
+              <button type="button" class="chip dec-chip" data-reduce="500">- ₹500</button>
+              <button type="button" class="chip dec-chip" data-reduce="all">Clear All</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="decAmountInp">Amount to Reduce by (₹)</label>
+            <div class="currency-wrap">
+              <span class="currency-sym">₹</span>
+              <input type="number" id="decAmountInp" class="form-input form-input-lg" placeholder="0" min="1" step="any" required />
+            </div>
+          </div>
+
+          <div class="dec-preview-banner" id="decPreviewBanner">
+            <span>New Remaining Amount:</span>
+            <strong id="decRemainingAmt">₹0</strong>
+          </div>
+        </div>
+        <div class="modal-ft">
+          <button type="button" class="btn btn-secondary" data-close="modalDecreaseExpense">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-decrease-confirm">Confirm Reduction</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: DECREASE BORROWED AMOUNT (Interactive with Secret Key) -->
+  <div class="modal-bg" id="modalDecreaseBorrow">
+    <div class="modal">
+      <div class="modal-hd">
+        <h3>Decrease Borrowed Amount</h3>
+        <button class="modal-x" data-close="modalDecreaseBorrow">✕</button>
+      </div>
+      <form id="formDecreaseBorrow">
+        <input type="hidden" id="decBorrowExpId" />
+        <div class="modal-bd">
+          <div class="decrease-info-card">
+            <div>
+              <span class="dinfo-label">Borrow Description</span>
+              <strong class="dinfo-val" id="decBorrowDesc">Dinner</strong>
+              <div style="font-size: .75rem; color: var(--muted); margin-top: 2px;" id="decBorrowPayer">Paid by Rahul</div>
+            </div>
+            <div style="text-align: right;">
+              <span class="dinfo-label">Current Borrow Amount</span>
+              <strong class="dinfo-amt" id="decBorrowCurrentAmt">₹0</strong>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label required" for="decBorrowKeyInp">Enter Secret Key</label>
+            <input type="password" id="decBorrowKeyInp" class="form-input" placeholder="Type the secret key created with this borrow..." required autocomplete="off" />
+            <div class="field-err" id="decBorrowKeyErr">Incorrect secret key! You cannot decrease this borrow.</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label required" for="decBorrowAmtInp">Amount to Reduce by (₹)</label>
+            <div class="currency-wrap">
+              <span class="currency-sym">₹</span>
+              <input type="number" id="decBorrowAmtInp" class="form-input form-input-lg" placeholder="0" min="1" step="any" required />
+            </div>
+          </div>
+
+          <div class="dec-preview-banner" id="decBorrowPreview">
+            <span>New Remaining Borrow:</span>
+            <strong id="decBorrowRemainingAmt">₹0</strong>
+          </div>
+        </div>
+        <div class="modal-ft">
+          <button type="button" class="btn btn-secondary" data-close="modalDecreaseBorrow">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-decrease-confirm">Confirm & Reduce</button>
         </div>
       </form>
     </div>

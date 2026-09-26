@@ -50,9 +50,15 @@
   const spenderErr        = $('spenderErr');
   const amountErr         = $('amountErr');
   const spentForErr       = $('spentForErr');
+  const borrowSecretKey   = $('borrowSecretKey');
+  const secretKeyErr      = $('secretKeyErr');
 
   // Spend Amount
   const personCards       = $('personCards');
+
+  // Borrow Records Block
+  const borrowRecordsList = $('borrowRecordsList');
+  const borrowCountBadge  = $('borrowCountBadge');
 
   // Final Settlement
   const settlementList    = $('settlementList');
@@ -79,6 +85,30 @@
   const dExpTitle         = $('dExpTitle');
   const dBreakdownList    = $('dBreakdownList');
 
+  // Decrease Self Spend modal
+  const modalDecreaseExpense = $('modalDecreaseExpense');
+  const formDecreaseExpense  = $('formDecreaseExpense');
+  const decExpId             = $('decExpId');
+  const decPersonName        = $('decPersonName');
+  const decDesc              = $('decDesc');
+  const decCurrentAmt        = $('decCurrentAmt');
+  const decAmountInp         = $('decAmountInp');
+  const decRemainingAmt      = $('decRemainingAmt');
+  const decQuickChips        = $('decQuickChips');
+
+  // Decrease Borrow modal (with Secret Key)
+  const modalDecreaseBorrow     = $('modalDecreaseBorrow');
+  const formDecreaseBorrow      = $('formDecreaseBorrow');
+  const decBorrowExpId          = $('decBorrowExpId');
+  const decBorrowDesc           = $('decBorrowDesc');
+  const decBorrowPayer          = $('decBorrowPayer');
+  const decBorrowCurrentAmt     = $('decBorrowCurrentAmt');
+  const decBorrowKeyInp         = $('decBorrowKeyInp');
+  const decBorrowKeyErr         = $('decBorrowKeyErr');
+  const decBorrowAmtInp         = $('decBorrowAmtInp');
+  const decBorrowPreview        = $('decBorrowPreview');
+  const decBorrowRemainingAmt   = $('decBorrowRemainingAmt');
+
   // Edit modal
   const modalEdit         = $('modalEdit');
   const formEdit          = $('formEdit');
@@ -94,6 +124,9 @@
   // Footer
   const btnExport         = $('btnExport');
   const btnClearAll       = $('btnClearAll');
+
+  // Per-person redo stack for undo/redo
+  const redoStacks = {};
 
   // ─── UTILS ───────────────────────────────────────────────────────────────────
   const fmtINR = v => {
@@ -224,6 +257,7 @@
     renderSpenderOptions(spenderGrid, getSelectedSpender(spenderGrid), people);
     renderIndividualCheckboxes();
     renderPersonCards(data);
+    renderBorrowRecords();
     renderSettlement(data);
   }
 
@@ -394,28 +428,45 @@
               <div class="avatar">${initials(person)}</div>
               <span class="pcard-name">${person}</span>
             </div>
-            <div class="pcard-header-right">
-              <form class="quick-spend" data-person="${person}">
-                <div class="qs-wrap">
-                  <span class="qs-sym">₹</span>
-                  <input
-                    type="number"
-                    class="qs-input"
-                    placeholder="Self spend…"
-                    min="1"
-                    step="any"
-                    title="Quick: add a personal expense for ${person}"
-                  />
-                </div>
-                <button type="submit" class="qs-btn" title="Add">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
-                </button>
-              </form>
-              <button type="button" class="btn-undo-person" data-person="${person}" title="Undo previous spending for ${person}">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+            <span class="pcard-balance-chip ${chipClass}">${chipText}</span>
+          </div>
+
+          <!-- Self spend row below name in a row -->
+          <div class="pcard-self-spend-row">
+            <form class="quick-spend-form" data-person="${person}">
+              <div class="qs-amt-wrap">
+                <span class="qs-sym">₹</span>
+                <input
+                  type="number"
+                  class="qs-amt-input"
+                  placeholder="Amount"
+                  min="1"
+                  step="any"
+                  required
+                  title="Amount spent by ${person} on themselves"
+                />
+              </div>
+              <input
+                type="text"
+                class="qs-desc-input"
+                placeholder="Why? (e.g. Snacks, Tea)"
+                maxlength="40"
+                title="Description / why"
+              />
+              <button type="submit" class="qs-btn" title="Add self spend">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                Add
+              </button>
+            </form>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <button type="button" class="btn-undo-person" data-person="${person}" title="Undo previous self-spending for ${person}">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
                 Undo
               </button>
-              <span class="pcard-balance-chip ${chipClass}">${chipText}</span>
+              <button type="button" class="btn-redo-person" data-person="${person}" title="Redo previous undone spending for ${person}">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></svg>
+                Redo
+              </button>
             </div>
           </div>
 
@@ -431,33 +482,39 @@
     }).join('');
 
     // ── Quick Spend: submit via Enter or button click
-    personCards.querySelectorAll('.quick-spend').forEach(form => {
+    personCards.querySelectorAll('.quick-spend-form').forEach(form => {
       const person = form.dataset.person;
-      const inp    = form.querySelector('.qs-input');
-      const btn    = form.querySelector('.qs-btn');
+      const amtInp = form.querySelector('.qs-amt-input');
+      const descInp = form.querySelector('.qs-desc-input');
+      const btn = form.querySelector('.qs-btn');
 
       form.addEventListener('submit', e => {
         e.preventDefault();
         e.stopPropagation();
-        const amount = parseFloat(inp.value);
+        const amount = parseFloat(amtInp.value);
         if (!amount || amount <= 0) {
-          inp.classList.add('qs-error');
-          inp.focus();
-          setTimeout(() => inp.classList.remove('qs-error'), 900);
+          amtInp.classList.add('qs-error');
+          amtInp.focus();
+          setTimeout(() => amtInp.classList.remove('qs-error'), 900);
           return;
         }
-        // Save: spentBy = person, spentFor = [person] (personal expense)
+
+        const description = (descInp.value || '').trim() || 'Self Spend';
+
+        // Save: spentBy = person, spentFor = [person] (personal self expense)
         expenses.push({
           id: genId(),
           spentBy: person,
           amount,
           spentFor: [person],
-          description: 'Personal',
+          description,
           date: today(),
+          isSelfSpend: true,
           createdAt: Date.now()
         });
         save();
-        inp.value = '';
+        amtInp.value = '';
+        descInp.value = '';
         btn.classList.add('qs-ok');
         setTimeout(() => btn.classList.remove('qs-ok'), 800);
         renderAll();
@@ -467,27 +524,47 @@
       form.addEventListener('click', e => e.stopPropagation());
     });
 
-    // ── Undo previous spending for this person
+    // ── Undo previous self-spending for this person (cannot remove spending by others)
     personCards.querySelectorAll('.btn-undo-person').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
         const person = btn.dataset.person;
-        // Find latest expense involving this person (paid by them or spent for them)
         let targetIdx = -1;
         for (let i = expenses.length - 1; i >= 0; i--) {
           const exp = expenses[i];
-          if (exp.spentBy === person || (exp.spentFor && exp.spentFor.includes(person))) {
+          // ONLY undo self-spending made by this person, NOT spending by others!
+          if (exp.spentBy === person && Array.isArray(exp.spentFor) && exp.spentFor.length === 1 && exp.spentFor[0] === person) {
             targetIdx = i;
             break;
           }
         }
 
         if (targetIdx === -1) {
-          alert(`No previous spendings found to undo for ${person}.`);
+          alert(`No self-spendings found to undo for ${person}. (Undo cannot remove spendings by others)`);
           return;
         }
 
-        expenses.splice(targetIdx, 1);
+        const removedExp = expenses.splice(targetIdx, 1)[0];
+        if (!redoStacks[person]) redoStacks[person] = [];
+        redoStacks[person].push(removedExp);
+
+        save();
+        renderAll();
+      });
+    });
+
+    // ── Redo previous undone spending for this person
+    personCards.querySelectorAll('.btn-redo-person').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const person = btn.dataset.person;
+        if (!redoStacks[person] || redoStacks[person].length === 0) {
+          alert(`Nothing to redo for ${person}.`);
+          return;
+        }
+
+        const restoredExp = redoStacks[person].pop();
+        expenses.push(restoredExp);
         save();
         renderAll();
       });
@@ -566,25 +643,33 @@
     if (!exps.length) {
       dBreakdownList.innerHTML = `<div class="bkrow"><span class="bkrow-left"><span class="bkrow-desc" style="color:var(--light)">No expenses recorded for ${person} yet.</span></span></div>`;
     } else {
-      const rows = exps.map(e => `
-        <div class="bkrow">
-          <div class="bkrow-left">
-            <span class="bkrow-desc">${e.desc}</span>
-            <span class="bkrow-meta">
-              Paid by <strong>${e.paidBy}</strong> • 
-              ${e.spentFor && e.spentFor.length > 1 ? `Split ${e.spentFor.length} ways (₹${(e.amount/e.spentFor.length).toFixed(2)} each)` : 'Full amount'} •
-              ${fmtDate(e.date)}
-            </span>
+      const rows = exps.map(e => {
+        // ONLY self-spend can be decreased! (Cannot decrease spending by others)
+        const isSelfSpend = (e.paidBy === person && Array.isArray(e.spentFor) && e.spentFor.length === 1 && e.spentFor[0] === person);
+        const decreaseBtnHtml = isSelfSpend ? `
+          <button type="button" class="btn-decrease-amt" data-exp-id="${e.id}" data-person="${person}" title="Decrease this self spend">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Decrease
+          </button>
+        ` : '';
+
+        return `
+          <div class="bkrow">
+            <div class="bkrow-left">
+              <span class="bkrow-desc">${e.desc}</span>
+              <span class="bkrow-meta">
+                Paid by <strong>${e.paidBy}</strong> • 
+                ${e.spentFor && e.spentFor.length > 1 ? `Split ${e.spentFor.length} ways (₹${(e.amount/e.spentFor.length).toFixed(2)} each)` : 'Self spend'} •
+                ${fmtDate(e.date)}
+              </span>
+            </div>
+            <div class="bkrow-right">
+              <span class="bkrow-amt">${fmtINR(e.share)}</span>
+              ${decreaseBtnHtml}
+            </div>
           </div>
-          <div class="bkrow-right">
-            <span class="bkrow-amt">${fmtINR(e.share)}</span>
-            <button type="button" class="btn-decrease-amt" data-exp-id="${e.id}" data-person="${person}" title="Decrease this expenditure">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Decrease
-            </button>
-          </div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
 
       const totalRow = `
         <div class="bkrow bkrow-total">
@@ -597,40 +682,13 @@
 
       dBreakdownList.innerHTML = rows + totalRow;
 
-      // Event listener for decreasing expenditure amount
+      // Event listener for decreasing self-spend expenditure amount
       dBreakdownList.querySelectorAll('.btn-decrease-amt').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', e => {
           e.stopPropagation();
           const expId = btn.dataset.expId;
           const forPersonName = btn.dataset.person;
-          const exp = expenses.find(x => x.id === expId);
-          if (!exp) return;
-
-          const currentAmt = exp.amount;
-          const isSplit = exp.spentFor && exp.spentFor.length > 1;
-          const shareText = isSplit ? ` (share: ₹${(exp.amount / exp.spentFor.length).toFixed(2)})` : '';
-          const inputVal = prompt(`Decrease amount for "${exp.description || 'Expense'}" (Current total: ₹${currentAmt}${shareText}):\nEnter amount to reduce by (₹):`);
-          if (inputVal === null) return;
-
-          const reduceBy = parseFloat(inputVal);
-          if (isNaN(reduceBy) || reduceBy <= 0) {
-            alert('Please enter a valid amount greater than 0.');
-            return;
-          }
-
-          if (reduceBy >= currentAmt) {
-            if (confirm(`Reducing by ₹${reduceBy} will remove this expense completely (Current: ₹${currentAmt}). Proceed?`)) {
-              expenses = expenses.filter(x => x.id !== expId);
-            } else {
-              return;
-            }
-          } else {
-            exp.amount = Math.round((currentAmt - reduceBy) * 100) / 100;
-          }
-
-          save();
-          renderAll();
-          openDetailModal(forPersonName, calculate());
+          openDecreaseModal(expId, forPersonName);
         });
       });
     }
@@ -638,15 +696,210 @@
     openModal(modalPersonDetail);
   }
 
+  // ─── INTERACTIVE DECREASE SELF-SPEND MODAL ────────────────────────────────────
+  function openDecreaseModal(expId, personName) {
+    const exp = expenses.find(x => x.id === expId);
+    if (!exp) return;
+
+    decExpId.value = exp.id;
+    decPersonName.value = personName;
+    decDesc.textContent = exp.description || 'Self Spend';
+    decCurrentAmt.textContent = fmtINR(exp.amount);
+    decAmountInp.value = '';
+    decAmountInp.max = exp.amount;
+    decRemainingAmt.textContent = fmtINR(exp.amount);
+
+    if (decQuickChips) {
+      decQuickChips.querySelectorAll('.dec-chip').forEach(c => c.classList.remove('active'));
+    }
+
+    openModal(modalDecreaseExpense);
+    setTimeout(() => decAmountInp.focus(), 80);
+  }
+
+  if (decAmountInp) {
+    decAmountInp.addEventListener('input', () => {
+      const exp = expenses.find(x => x.id === decExpId.value);
+      if (!exp) return;
+      const reduceVal = parseFloat(decAmountInp.value) || 0;
+      const remaining = Math.max(0, exp.amount - reduceVal);
+      decRemainingAmt.textContent = fmtINR(remaining);
+    });
+  }
+
+  if (decQuickChips) {
+    decQuickChips.addEventListener('click', e => {
+      const chip = e.target.closest('.dec-chip');
+      if (!chip) return;
+      const exp = expenses.find(x => x.id === decExpId.value);
+      if (!exp) return;
+
+      const reduceType = chip.dataset.reduce;
+      let reduceVal = 0;
+      if (reduceType === 'all') {
+        reduceVal = exp.amount;
+      } else {
+        reduceVal = Math.min(exp.amount, parseFloat(reduceType) || 0);
+      }
+      decAmountInp.value = reduceVal;
+      decRemainingAmt.textContent = fmtINR(Math.max(0, exp.amount - reduceVal));
+      decQuickChips.querySelectorAll('.dec-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+    });
+  }
+
+  if (formDecreaseExpense) {
+    formDecreaseExpense.addEventListener('submit', e => {
+      e.preventDefault();
+      const expId = decExpId.value;
+      const personName = decPersonName.value;
+      const exp = expenses.find(x => x.id === expId);
+      if (!exp) return;
+
+      const reduceBy = parseFloat(decAmountInp.value);
+      if (isNaN(reduceBy) || reduceBy <= 0) {
+        alert('Please enter a valid amount greater than 0.');
+        return;
+      }
+
+      if (reduceBy >= exp.amount) {
+        expenses = expenses.filter(x => x.id !== expId);
+      } else {
+        exp.amount = Math.round((exp.amount - reduceBy) * 100) / 100;
+      }
+
+      save();
+      closeModal(modalDecreaseExpense);
+      renderAll();
+      openDetailModal(personName, calculate());
+    });
+  }
+
+  // ─── PREVIOUS BORROW RECORDS BLOCK ───────────────────────────────────────────
+  function renderBorrowRecords() {
+    if (!borrowRecordsList) return;
+    const borrowExps = expenses.filter(e => e.isBorrow || (Array.isArray(e.spentFor) && e.spentFor.some(p => p !== e.spentBy)));
+
+    if (borrowCountBadge) {
+      borrowCountBadge.textContent = `${borrowExps.length} ${borrowExps.length === 1 ? 'record' : 'records'}`;
+    }
+
+    if (!borrowExps.length) {
+      borrowRecordsList.innerHTML = '<div class="empty-hint" style="text-align:center; padding:16px;">No borrow records yet. Submit a borrow amount above.</div>';
+      return;
+    }
+
+    const sorted = [...borrowExps].sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    borrowRecordsList.innerHTML = sorted.map(e => `
+      <div class="borrow-card">
+        <div class="borrow-card-top">
+          <div class="borrow-card-payer">
+            <div class="avatar" style="width:24px;height:24px;font-size:.65rem">${initials(e.spentBy)}</div>
+            <span><strong>${e.spentBy}</strong> paid</span>
+          </div>
+          <span class="borrow-card-amt">${fmtINR(e.amount)}</span>
+        </div>
+        <div class="borrow-card-mid">
+          <div>For: <strong>${(e.spentFor || []).join(', ')}</strong></div>
+          <span class="borrow-desc-tag">${e.description || 'Borrow'}</span>
+          <span>${fmtDate(e.date)}</span>
+        </div>
+        <div class="borrow-card-actions">
+          <span class="key-protected-badge">🔒 Secret Key Protected</span>
+          <button type="button" class="btn-decrease-borrow" data-exp-id="${e.id}">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Decrease Borrow
+          </button>
+        </div>
+      </div>
+    `).join('');
+
+    borrowRecordsList.querySelectorAll('.btn-decrease-borrow').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        openDecreaseBorrowModal(btn.dataset.expId);
+      });
+    });
+  }
+
+  // ─── DECREASE BORROW MODAL (WITH SECRET KEY) ─────────────────────────────────
+  function openDecreaseBorrowModal(expId) {
+    const exp = expenses.find(x => x.id === expId);
+    if (!exp) return;
+
+    decBorrowExpId.value = exp.id;
+    decBorrowDesc.textContent = exp.description || 'Borrow';
+    decBorrowPayer.textContent = `Paid by ${exp.spentBy} for ${(exp.spentFor || []).join(', ')}`;
+    decBorrowCurrentAmt.textContent = fmtINR(exp.amount);
+    decBorrowKeyInp.value = '';
+    decBorrowAmtInp.value = '';
+    decBorrowAmtInp.max = exp.amount;
+    decBorrowRemainingAmt.textContent = fmtINR(exp.amount);
+    decBorrowKeyErr.classList.remove('show');
+
+    openModal(modalDecreaseBorrow);
+    setTimeout(() => decBorrowKeyInp.focus(), 80);
+  }
+
+  if (decBorrowAmtInp) {
+    decBorrowAmtInp.addEventListener('input', () => {
+      const exp = expenses.find(x => x.id === decBorrowExpId.value);
+      if (!exp) return;
+      const reduceVal = parseFloat(decBorrowAmtInp.value) || 0;
+      const remaining = Math.max(0, exp.amount - reduceVal);
+      decBorrowRemainingAmt.textContent = fmtINR(remaining);
+    });
+  }
+
+  if (formDecreaseBorrow) {
+    formDecreaseBorrow.addEventListener('submit', e => {
+      e.preventDefault();
+      const expId = decBorrowExpId.value;
+      const exp = expenses.find(x => x.id === expId);
+      if (!exp) return;
+
+      const typedKey = decBorrowKeyInp.value.trim();
+      // Only when this key is typed, the amount can be decreased!
+      if (!exp.secretKey || typedKey !== exp.secretKey) {
+        decBorrowKeyErr.classList.add('show');
+        decBorrowKeyInp.focus();
+        return;
+      }
+      decBorrowKeyErr.classList.remove('show');
+
+      const reduceBy = parseFloat(decBorrowAmtInp.value);
+      if (isNaN(reduceBy) || reduceBy <= 0) {
+        alert('Please enter a valid amount greater than 0.');
+        return;
+      }
+
+      if (reduceBy >= exp.amount) {
+        if (confirm(`Reducing by ₹${reduceBy} will remove this borrow completely (Current: ₹${exp.amount}). Proceed?`)) {
+          expenses = expenses.filter(x => x.id !== expId);
+        } else {
+          return;
+        }
+      } else {
+        exp.amount = Math.round((exp.amount - reduceBy) * 100) / 100;
+      }
+
+      save();
+      closeModal(modalDecreaseBorrow);
+      renderAll();
+    });
+  }
+
   // ─── BORROW FORM SUBMIT ───────────────────────────────────────────────────────
   borrowForm.addEventListener('submit', e => {
     e.preventDefault();
 
-    const spentBy    = getSelectedSpender(spenderGrid);
-    const amount     = parseFloat(inpAmount.value);
-    const spentFor   = Array.from(individualChks.querySelectorAll('input:checked')).map(c => c.value);
+    const spentBy     = getSelectedSpender(spenderGrid);
+    const amount      = parseFloat(inpAmount.value);
+    const spentFor    = Array.from(individualChks.querySelectorAll('input:checked')).map(c => c.value);
     const description = inpDesc.value.trim();
-    const date       = inpDate.value || today();
+    const date        = inpDate.value || today();
+    const secretKey   = borrowSecretKey ? borrowSecretKey.value.trim() : '';
 
     let err = false;
 
@@ -661,9 +914,27 @@
     if (!filteredSpentFor.length) { spentForErr.classList.add('show'); err = true; }
     else                         { spentForErr.classList.remove('show'); }
 
+    // Secret key is required to protect this borrow
+    if (!secretKey) {
+      if (secretKeyErr) secretKeyErr.classList.add('show');
+      err = true;
+    } else {
+      if (secretKeyErr) secretKeyErr.classList.remove('show');
+    }
+
     if (err) return;
 
-    expenses.push({ id: genId(), spentBy, amount, spentFor: filteredSpentFor, description, date, createdAt: Date.now() });
+    expenses.push({
+      id: genId(),
+      spentBy,
+      amount,
+      spentFor: filteredSpentFor,
+      description: description || 'Borrow',
+      date,
+      secretKey,
+      isBorrow: true,
+      createdAt: Date.now()
+    });
     save();
     renderAll();
     resetForm();
@@ -684,6 +955,12 @@
     renderIndividualCheckboxes();
 
     // Uncheck Everyone + individual checkboxes
+    chkEveryone.checked = false;
+    individualChks.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+
+    // Clear secret key
+    if (borrowSecretKey) borrowSecretKey.value = '';
+    if (secretKeyErr) secretKeyErr.classList.remove('show');
     chkEveryone.checked = false;
     individualChks.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
 

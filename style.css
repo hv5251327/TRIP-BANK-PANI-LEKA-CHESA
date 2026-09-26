@@ -388,40 +388,59 @@ borrowForm { display: flex; flex-direction: column; gap: 18px; }
 
 .pcard-name { font-size: 1rem; font-weight: 700; }
 
-.pcard-header-right {
-  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+.pcard-balance-chip {
+  font-size: .78rem; font-weight: 700;
+  padding: 4px 10px; border-radius: var(--r-full);
+}
+.chip--green { background: var(--green-s); color: var(--green-d); border: 1px solid var(--green-b); }
+.chip--red   { background: var(--red-s);   color: var(--red-d);   border: 1px solid var(--red-b); }
+.chip--grey  { background: var(--subtle);  color: var(--muted);   border: 1px solid var(--border); }
+
+/* ── Self Spend Row (below name in a row) ── */
+.pcard-self-spend-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 10px 16px;
+  background: #ffffff; border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
 }
 
-/* ── Quick Spend inline form ── */
-.quick-spend {
-  display: flex; align-items: center; gap: 0;
-  background: #fff; border: 1.5px solid var(--border);
-  border-radius: 8px; overflow: hidden;
-  transition: var(--tr);
-}
-.quick-spend:focus-within {
-  border-color: var(--blue);
-  box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+.quick-spend-form {
+  display: flex; align-items: center; gap: 6px;
+  flex: 1; min-width: 0;
 }
 
-.qs-wrap {
-  display: flex; align-items: center; position: relative;
+.qs-amt-wrap {
+  position: relative; display: flex; align-items: center;
+  width: 95px; flex-shrink: 0;
 }
 .qs-sym {
-  position: absolute; left: 7px;
+  position: absolute; left: 8px;
   font-size: .8rem; font-weight: 700;
   color: var(--muted); pointer-events: none;
 }
-.qs-input {
-  width: 110px; padding: 6px 8px 6px 20px;
+.qs-amt-input {
+  width: 100%; padding: 6px 8px 6px 20px;
   font-family: var(--mono); font-size: .8rem; font-weight: 600;
-  border: none; outline: none; background: transparent; color: var(--text);
-  -moz-appearance: textfield;
+  border: 1.5px solid var(--border); border-radius: var(--r-sm);
+  outline: none; background: #fff; color: var(--text);
+  transition: var(--tr);
 }
-.qs-input::-webkit-outer-spin-button,
-.qs-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.qs-amt-input:focus {
+  border-color: var(--blue); box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+}
 
-.qs-input.qs-error { animation: shake .3s ease; background: var(--red-s); }
+.qs-desc-input {
+  flex: 1; min-width: 90px;
+  padding: 6px 10px; font-size: .78rem; font-family: var(--font);
+  border: 1.5px solid var(--border); border-radius: var(--r-sm);
+  outline: none; background: #fff; color: var(--text);
+  transition: var(--tr);
+}
+.qs-desc-input:focus {
+  border-color: var(--blue); box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+}
+
+.qs-amt-input.qs-error { animation: shake .3s ease; background: var(--red-s); }
 @keyframes shake {
   0%,100% { transform: translateX(0); }
   25%      { transform: translateX(-4px); }
@@ -429,8 +448,9 @@ borrowForm { display: flex; flex-direction: column; gap: 18px; }
 }
 
 .qs-btn {
-  padding: 6px 9px; background: var(--blue); border: none; cursor: pointer;
+  padding: 6px 12px; background: var(--blue); border: none; cursor: pointer;
   color: #fff; display: flex; align-items: center; justify-content: center;
+  gap: 4px; border-radius: var(--r-sm); font-size: .75rem; font-weight: 700;
   transition: var(--tr); flex-shrink: 0;
 }
 .qs-btn:hover { background: var(--blue-h); }
@@ -442,15 +462,99 @@ borrowForm { display: flex; flex-direction: column; gap: 18px; }
   color: var(--muted); font-family: var(--font);
   font-size: .72rem; font-weight: 600;
   padding: 5px 9px; border-radius: var(--r-sm);
-  cursor: pointer; transition: var(--tr); white-space: nowrap;
+  cursor: pointer; transition: var(--tr); white-space: nowrap; flex-shrink: 0;
 }
 .btn-undo-person:hover {
   background: #e2e8f0; color: var(--text); border-color: var(--bord2);
 }
 
-.pcard-balance-chip {
-  font-size: .78rem; font-weight: 700;
-  padding: 4px 10px; border-radius: var(--r-full);
+.btn-redo-person {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--subtle); border: 1.5px solid var(--border);
+  color: var(--muted); font-family: var(--font);
+  font-size: .72rem; font-weight: 600;
+  padding: 5px 9px; border-radius: var(--r-sm);
+  cursor: pointer; transition: var(--tr); white-space: nowrap; flex-shrink: 0;
+}
+.btn-redo-person:hover {
+  background: #e2e8f0; color: var(--text); border-color: var(--bord2);
+}
+
+/* ── Previous Borrow Records Block ── */
+.borrow-records-list {
+  display: flex; flex-direction: column; gap: 10px;
+  max-height: 420px; overflow-y: auto; padding-right: 4px;
+}
+
+.borrow-card {
+  background: #ffffff; border: 1.5px solid var(--border);
+  border-radius: var(--r-md); padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 8px;
+  box-shadow: var(--sh-sm); transition: var(--tr);
+}
+.borrow-card:hover {
+  border-color: var(--bord2); box-shadow: var(--sh-md);
+}
+
+.borrow-card-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.borrow-card-payer {
+  display: flex; align-items: center; gap: 8px; font-size: .875rem; font-weight: 600;
+}
+.borrow-card-amt {
+  font-family: var(--mono); font-size: 1.05rem; font-weight: 800; color: var(--text);
+}
+.borrow-card-mid {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;
+  font-size: .78rem; color: var(--muted);
+}
+.borrow-desc-tag {
+  background: var(--subtle); border: 1px solid var(--border);
+  padding: 2px 8px; border-radius: 4px; font-weight: 600; color: var(--text);
+}
+.borrow-card-actions {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-top: 8px; border-top: 1px dashed var(--border);
+}
+.btn-decrease-borrow {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: #fff; border: 1.5px solid var(--red-b);
+  color: var(--red); font-family: var(--font);
+  font-size: .72rem; font-weight: 700;
+  padding: 4px 10px; border-radius: var(--r-sm);
+  cursor: pointer; transition: var(--tr);
+}
+.btn-decrease-borrow:hover {
+  background: var(--red); color: #fff;
+}
+.key-protected-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: .7rem; font-weight: 600; color: #b45309;
+  background: #fef3c7; border: 1px solid #fde68a;
+  padding: 2px 7px; border-radius: var(--r-full);
+}
+
+/* ── Interactive Decrease Modal ── */
+.decrease-info-card {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; background: var(--subtle);
+  border: 1px solid var(--border); border-radius: var(--r-md);
+}
+.dinfo-label { display: block; font-size: .7rem; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.dinfo-val { font-size: .95rem; color: var(--text); }
+.dinfo-amt { font-family: var(--mono); font-size: 1.15rem; color: var(--text); }
+.dec-preview-banner {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; background: var(--green-s);
+  border: 1px solid var(--green-b); border-radius: var(--r-md);
+  font-size: .85rem; font-weight: 700; color: var(--green-d);
+}
+.btn-decrease-confirm {
+  background: var(--red); border-color: var(--red);
+}
+.btn-decrease-confirm:hover {
+  background: var(--red-d);
 }
 .chip--green { background: var(--green-s); color: var(--green-d); border: 1px solid var(--green-b); }
 .chip--red   { background: var(--red-s);   color: var(--red-d);   border: 1px solid var(--red-b); }

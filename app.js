@@ -474,14 +474,8 @@
     elExpCount.textContent = `${expenses.length} ${expenses.length === 1 ? 'expense' : 'expenses'}`;
     elPeopleCount.textContent  = people.length;
 
-    const effectiveAvg = customAvg !== null ? customAvg : autoAvg;
-    elAvgPerPerson.innerHTML = `${fmtINR(effectiveAvg)} <span class="per-person">/ person</span>`;
-
-    if (customAvg !== null) {
-      elAvgFormula.innerHTML = `<span style="color:#92400e;font-weight:600">Custom target</span> (Auto: ${fmtINR(autoAvg)})`;
-    } else {
-      elAvgFormula.textContent = 'Total ÷ People';
-    }
+    elAvgPerPerson.innerHTML = `${fmtINR(autoAvg)} <span class="per-person">/ person</span>`;
+    elAvgFormula.textContent = 'Total ÷ People';
 
     // Member pills
     elMemberPills.innerHTML = people.map(p => `<span class="pill">${p}</span>`).join('');
@@ -1349,33 +1343,39 @@
     renderAll();
   });
 
-  // ─── CUSTOM AVERAGE ───────────────────────────────────────────────────────────
-  btnToggleAvg.addEventListener('click', () => {
-    const visible = customAvgRow.style.display === 'flex';
-    customAvgRow.style.display = visible ? 'none' : 'flex';
-    if (!visible) {
-      customAvgInp.value = customAvg !== null ? customAvg : '';
-      customAvgInp.focus();
-    }
-  });
+  // ─── CUSTOM AVERAGE (if elements exist) ───────────────────────────────────────
+  if (btnToggleAvg && customAvgRow) {
+    btnToggleAvg.addEventListener('click', () => {
+      const visible = customAvgRow.style.display === 'flex';
+      customAvgRow.style.display = visible ? 'none' : 'flex';
+      if (!visible && customAvgInp) {
+        customAvgInp.value = customAvg !== null ? customAvg : '';
+        customAvgInp.focus();
+      }
+    });
+  }
 
-  btnSaveAvg.addEventListener('click', () => {
-    const v = parseFloat(customAvgInp.value);
-    if (!isNaN(v) && v >= 0) {
-      customAvg = v;
+  if (btnSaveAvg) {
+    btnSaveAvg.addEventListener('click', () => {
+      const v = parseFloat(customAvgInp.value);
+      if (!isNaN(v) && v >= 0) {
+        customAvg = v;
+        save();
+        renderAll();
+        if (customAvgRow) customAvgRow.style.display = 'none';
+      }
+    });
+  }
+
+  if (btnResetAvg) {
+    btnResetAvg.addEventListener('click', () => {
+      customAvg = null;
+      if (customAvgInp) customAvgInp.value = '';
       save();
       renderAll();
-      customAvgRow.style.display = 'none';
-    }
-  });
-
-  btnResetAvg.addEventListener('click', () => {
-    customAvg = null;
-    customAvgInp.value = '';
-    save();
-    renderAll();
-    customAvgRow.style.display = 'none';
-  });
+      if (customAvgRow) customAvgRow.style.display = 'none';
+    });
+  }
 
   // ─── EDIT EXPENSE ─────────────────────────────────────────────────────────────
   // Edit is triggered from the Person Detail modal's breakdown entries (via dedicated edit buttons if needed)

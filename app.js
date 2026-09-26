@@ -18,6 +18,8 @@
   const SK_AVGOVER         = 'ts_avgover_v2';
   const SK_REDO            = 'ts_redo_v2';
   const SK_AUTO_ALL_SPENDS = 'ts_auto_all_spends_v2';
+  const SK_GLOBAL_UNDO     = 'ts_global_undo_v2';
+  const SK_GLOBAL_REDO     = 'ts_global_redo_v2';
 
   // ─── STATE ───────────────────────────────────────────────────────────────────
   let people           = [];
@@ -238,7 +240,27 @@
     globalUndoStack.push(snapshotState());
     if (globalUndoStack.length > GLOBAL_HISTORY_LIMIT) globalUndoStack.shift();
     globalRedoStack = []; // any new action invalidates the redo trail
+    persistGlobalHistory();
     updateUndoRedoBadges();
+  }
+
+  /** Save the undo/redo history to localStorage so it survives page reloads / background sync */
+  function persistGlobalHistory() {
+    try {
+      localStorage.setItem(SK_GLOBAL_UNDO, JSON.stringify(globalUndoStack));
+      localStorage.setItem(SK_GLOBAL_REDO, JSON.stringify(globalRedoStack));
+    } catch {}
+  }
+
+  /** Load the undo/redo history back from localStorage on startup */
+  function loadGlobalHistory() {
+    try {
+      globalUndoStack = JSON.parse(localStorage.getItem(SK_GLOBAL_UNDO)) || [];
+      globalRedoStack = JSON.parse(localStorage.getItem(SK_GLOBAL_REDO)) || [];
+    } catch {
+      globalUndoStack = [];
+      globalRedoStack = [];
+    }
   }
 
   function applySnapshot(json) {
@@ -253,6 +275,7 @@
     }
     save();
     renderAll();
+    persistGlobalHistory();
     updateUndoRedoBadges();
   }
 
@@ -1399,7 +1422,7 @@
       } else {
         if (reduceBy >= exp.amount) {
           const ok = await uiConfirm('Remove Borrow?', `Reducing by ₹${reduceBy} will remove this borrow completely.\n\nCurrent amount: ₹${exp.amount}\n\nProceed?`, { icon: '🗑️', confirmLabel: 'Yes, Remove' });
-          if (!ok) { globalUndoStack.pop(); updateUndoRedoBadges(); return; }
+          if (!ok) { globalUndoStack.pop(); persistGlobalHistory(); updateUndoRedoBadges(); return; }
           expenses = expenses.filter(x => x.id !== expId);
         } else {
           exp.amount = Math.round((exp.amount - reduceBy) * 100) / 100;
@@ -1756,6 +1779,7 @@
       people = []; expenses = []; customAvg = null; redoStacks = {}; defaultAllSpends = [];
       localStorage.clear();
       save();
+      persistGlobalHistory();
       renderAll();
       resetForm();
       await uiAlert('Data Cleared', 'All site data has been reset and cleared successfully!', { icon: '✅', type: 'success' });
@@ -1918,6 +1942,7 @@
   async function init() {
     // 1) Load from localStorage first (instant, works offline)
     load();
+    loadGlobalHistory();
     inpDate.value = today();
     renderAll();
     renderIndividualCheckboxes();

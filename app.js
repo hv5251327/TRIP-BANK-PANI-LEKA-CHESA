@@ -13,6 +13,7 @@
   const SK_PEOPLE   = 'ts_people_v2';
   const SK_EXPENSES = 'ts_expenses_v2';
   const SK_AVGOVER  = 'ts_avgover_v2';
+  const SK_REDO     = 'ts_redo_v2';
 
   // ─── STATE ───────────────────────────────────────────────────────────────────
   let people   = [];
@@ -108,6 +109,9 @@
   const decBorrowAmtInp         = $('decBorrowAmtInp');
   const decBorrowPreview        = $('decBorrowPreview');
   const decBorrowRemainingAmt   = $('decBorrowRemainingAmt');
+  const decBorrowPersonRow      = $('decBorrowPersonRow');
+  const decBorrowPayerSel       = $('decBorrowPayerSel');
+  const decBorrowPerHeadHint    = $('decBorrowPerHeadHint');
 
   // Edit modal
   const modalEdit         = $('modalEdit');
@@ -126,8 +130,8 @@
   const btnClearAll       = $('btnClearAll');
   const btnClearTop       = $('btnClearTop');
 
-  // Per-person redo stack for undo/redo
-  const redoStacks = {};
+  // Per-person redo stack for undo/redo (persisted to localStorage)
+  let redoStacks = {};
 
   // ─── UTILS ───────────────────────────────────────────────────────────────────
   const fmtINR = v => {
@@ -154,14 +158,16 @@
       expenses = JSON.parse(localStorage.getItem(SK_EXPENSES)) || [];
       const ca = localStorage.getItem(SK_AVGOVER);
       customAvg = ca !== null ? parseFloat(ca) : null;
+      redoStacks = JSON.parse(localStorage.getItem(SK_REDO)) || {};
     } catch {
-      people = []; expenses = []; customAvg = null;
+      people = []; expenses = []; customAvg = null; redoStacks = {};
     }
   }
 
   function save() {
     localStorage.setItem(SK_PEOPLE,   JSON.stringify(people));
     localStorage.setItem(SK_EXPENSES, JSON.stringify(expenses));
+    localStorage.setItem(SK_REDO,     JSON.stringify(redoStacks));
     if (customAvg !== null) localStorage.setItem(SK_AVGOVER, customAvg);
     else localStorage.removeItem(SK_AVGOVER);
   }
@@ -179,9 +185,12 @@
    *   expensesForPerson[person] = [ { desc, date, share, paidBy }, ... ]
    */
   function calculate() {
+    // totalSpend = all expenses (including self-spends) for "Total Trip Spending" display
     const totalSpend = expenses.reduce((s, e) => s + (Number(e.amount)||0), 0);
+    // groupSpend = only group/borrow expenses (excluding personal self-spends) for Average Per Person
+    const groupSpend = expenses.filter(e => !e.isSelfSpend).reduce((s, e) => s + (Number(e.amount)||0), 0);
     const n = people.length || 1;
-    const autoAvg = totalSpend / n;
+    const autoAvg = groupSpend / n;
 
     // Init per-person buckets
     const stats = {};
@@ -198,7 +207,8 @@
       const cnt    = bens.length;
       if (!cnt) return;
 
-      const perHead = amount / cnt;
+      // Bug 5 fix: round perHead to 2 decimal places to avoid floating-point drift
+      const perHead = Math.round(amount / cnt * 100) / 100;
 
       // Credit payer
       if (stats[payer]) stats[payer].totalPaid += amount;
@@ -258,7 +268,7 @@
     renderSpenderOptions(spenderGrid, getSelectedSpender(spenderGrid), people);
     renderIndividualCheckboxes();
     renderPersonCards(data);
-    renderBorrowRecords();
+    renderBorrowRecords(data);
     renderSettlement(data);
   }
 
@@ -280,10 +290,10 @@
     // Member pills
     elMemberPills.innerHTML = people.map(p => `<span class="pill">${p}</span>`).join('');
 
-    // Existing members hint in modal
+    // Existing members hint in modal (with delete button per person)
     if (existingMembers) {
       existingMembers.innerHTML = people.length
-        ? 'Current members: ' + people.map(p => `<span class="pill">${p}</span>`).join('')
+        ? 'Current members: ' + people.map(p => `<span class="pill">${p} <button type="button" class="pill-del" data-name="${p}" title="Remove ${p}">×</button></span>`).join('')
         : '<span style="color:var(--light)">No members yet</span>';
     }
   }
@@ -777,8 +787,9 @@
   }
 
   // ─── PREVIOUS BORROW RECORDS BLOCK ───────────────────────────────────────────
-  function renderBorrowRecords() {
+  function renderBorrowRecords(data) {
     if (!borrowRecordsList) return;
+    const transactions = (data && data.transactions) ? data.transactions : [];
     const borrowExps = expenses.filter(e => e.isBorrow || (Array.isArray(e.spentFor) && e.spentFor.some(p => p !== e.spentBy)));
 
     if (borrowCountBadge) {
@@ -792,8 +803,15 @@
 
     const sorted = [...borrowExps].sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
 
-    borrowRecordsList.innerHTML = sorted.map(e => `
-      <div class="borrow-card">
+    borrowRecordsList.innerHTML = sorted.map(e => {
+      // Bug 4: Check if this borrow is settled in net settlement.
+      // A borrow is settled if no beneficiary still needs to pay this payer in settlement transactions.
+      const isSettled = (e.spentFor || []).every(person =>
+        !transactions.some(t => t.from === person && t.to === e.spentBy)
+      );
+
+      return `
+      <div class="borrow-card ${isSettled ? 'borrow-card--settled' : ''}">
         <div class="borrow-card-top">
           <div class="borrow-card-payer">
             <div class="avatar" style="width:24px;height:24px;font-size:.65rem">${initials(e.spentBy)}</div>
@@ -807,14 +825,17 @@
           <span>${fmtDate(e.date)}</span>
         </div>
         <div class="borrow-card-actions">
-          <span class="key-protected-badge">🔒 Secret Key Protected</span>
-          <button type="button" class="btn-decrease-borrow" data-exp-id="${e.id}">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Decrease Borrow
-          </button>
+          ${isSettled
+            ? '<span class="borrow-settled-badge">✅ Settled in Net Settlement</span>'
+            : `<span class="key-protected-badge">🔒 Secret Key Protected</span>
+               <button type="button" class="btn-decrease-borrow" data-exp-id="${e.id}">
+                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                 Decrease Borrow
+               </button>`
+          }
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
 
     borrowRecordsList.querySelectorAll('.btn-decrease-borrow').forEach(btn => {
       btn.addEventListener('click', e => {
@@ -838,6 +859,28 @@
     decBorrowAmtInp.max = exp.amount;
     decBorrowRemainingAmt.textContent = fmtINR(exp.amount);
     decBorrowKeyErr.classList.remove('show');
+
+    // Bug 1 fix: show person selector for multi-beneficiary borrows
+    const beneficiaries = exp.spentFor || [];
+    const isMulti = beneficiaries.length > 1;
+    if (decBorrowPersonRow) {
+      decBorrowPersonRow.style.display = isMulti ? 'block' : 'none';
+    }
+    if (decBorrowPayerSel && isMulti) {
+      const perHead = Math.round(exp.amount / beneficiaries.length * 100) / 100;
+      decBorrowPayerSel.innerHTML = '<option value="">-- Select person --</option>' +
+        beneficiaries.map(p => `<option value="${p}">${p} (owes ${fmtINR(perHead)})</option>`).join('');
+      decBorrowPayerSel.value = '';
+      // Pre-fill amount with per-head share when person is selected
+      decBorrowPayerSel.onchange = () => {
+        if (decBorrowPayerSel.value) {
+          decBorrowAmtInp.value = perHead;
+          decBorrowRemainingAmt.textContent = fmtINR(Math.max(0, exp.amount - perHead));
+          if (decBorrowPerHeadHint) decBorrowPerHeadHint.textContent = `Share per person: ${fmtINR(perHead)}`;
+        }
+      };
+      if (decBorrowPerHeadHint) decBorrowPerHeadHint.textContent = '';
+    }
 
     openModal(modalDecreaseBorrow);
     setTimeout(() => decBorrowKeyInp.focus(), 80);
@@ -875,14 +918,39 @@
         return;
       }
 
-      if (reduceBy >= exp.amount) {
-        if (confirm(`Reducing by ₹${reduceBy} will remove this borrow completely (Current: ₹${exp.amount}). Proceed?`)) {
+      // Bug 1 fix: for multi-person borrows, use selected person to correctly attribute repayment
+      const beneficiaries = exp.spentFor || [];
+      const isMulti = beneficiaries.length > 1;
+      const selectedPerson = isMulti && decBorrowPayerSel ? decBorrowPayerSel.value : null;
+
+      if (isMulti && !selectedPerson) {
+        alert('Please select who is paying back their share.');
+        if (decBorrowPayerSel) decBorrowPayerSel.focus();
+        return;
+      }
+
+      if (isMulti && selectedPerson) {
+        // Remove the paying person from spentFor and reduce amount by exactly their per-head share
+        const perHead = Math.round(exp.amount / beneficiaries.length * 100) / 100;
+        const newSpentFor = exp.spentFor.filter(p => p !== selectedPerson);
+        if (newSpentFor.length === 0 || reduceBy >= exp.amount) {
+          // No more beneficiaries – remove the borrow entirely
           expenses = expenses.filter(x => x.id !== expId);
         } else {
-          return;
+          exp.spentFor = newSpentFor;
+          exp.amount = Math.round((exp.amount - perHead) * 100) / 100;
         }
       } else {
-        exp.amount = Math.round((exp.amount - reduceBy) * 100) / 100;
+        // Single-person borrow – existing behavior
+        if (reduceBy >= exp.amount) {
+          if (confirm(`Reducing by ₹${reduceBy} will remove this borrow completely (Current: ₹${exp.amount}). Proceed?`)) {
+            expenses = expenses.filter(x => x.id !== expId);
+          } else {
+            return;
+          }
+        } else {
+          exp.amount = Math.round((exp.amount - reduceBy) * 100) / 100;
+        }
       }
 
       save();
@@ -1014,6 +1082,23 @@
     renderAll();
   });
 
+  // ─── DELETE PERSON (via × button in existingMembers list) ────────────────────
+  existingMembers.addEventListener('click', e => {
+    const btn = e.target.closest('.pill-del');
+    if (!btn) return;
+    const name = btn.dataset.name;
+    if (!confirm(`Remove "${name}" from the trip?\n\nAll expenses involving ${name} will also be deleted. This cannot be undone.`)) return;
+    people = people.filter(p => p !== name);
+    expenses = expenses.filter(ex =>
+      ex.spentBy !== name &&
+      !(Array.isArray(ex.spentFor) && ex.spentFor.includes(name))
+    );
+    // Also remove any redo stack entries for this person
+    delete redoStacks[name];
+    save();
+    renderAll();
+  });
+
   // ─── CUSTOM AVERAGE ───────────────────────────────────────────────────────────
   btnToggleAvg.addEventListener('click', () => {
     const visible = customAvgRow.style.display === 'flex';
@@ -1111,7 +1196,9 @@
 
   // ─── FOOTER ───────────────────────────────────────────────────────────────────
   btnExport.addEventListener('click', () => {
-    const data = { exportDate: new Date().toISOString(), people, expenses };
+    // Bug 6 fix: strip secretKey from each expense before exporting
+    const safeExpenses = expenses.map(({ secretKey: _sk, ...rest }) => rest);
+    const data = { exportDate: new Date().toISOString(), people, expenses: safeExpenses };
     const url  = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(data, null, 2));
     const a    = document.createElement('a');
     a.href     = url;

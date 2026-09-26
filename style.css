@@ -773,3 +773,40 @@ borrowForm { display: flex; flex-direction: column; gap: 18px; }
   .spender-grid { grid-template-columns: repeat(2, 1fr); }
   .individual-chks { grid-template-columns: 1fr; }
 }
+
+/* ---- BUG FIXES ---- */
+
+/* Bug 4: Settled borrow card style */
+.borrow-card--settled {
+  border-color: var(--green-b);
+  background: var(--green-s);
+  opacity: .85;
+}
+.borrow-settled-badge {
+  font-size: .75rem; font-weight: 600;
+  color: var(--green-d);
+  background: var(--green-b);
+  padding: 3px 8px; border-radius: var(--r-full);
+}
+
+/* Bug 7: Custom average display-only note */
+.custom-avg-note {
+  font-size: .7rem;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 4px;
+  padding: 3px 7px;
+  margin-top: 4px;
+  display: none;
+}
+.custom-avg-row + .custom-avg-note { display: block; }
+
+/* Bug 8: Pill delete button */
+.pill-del {
+  background: none; border: none; cursor: pointer;
+  font-size: .75rem; color: var(--red);
+  padding: 0 2px; margin-left: 3px; line-height: 1;
+  vertical-align: middle; border-radius: 3px;
+  transition: background .15s;
+}
+.pill-del:hover { background: var(--red-b); }

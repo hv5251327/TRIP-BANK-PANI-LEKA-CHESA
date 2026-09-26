@@ -53,6 +53,7 @@
           <button class="btn btn-primary btn-xs" id="btnSaveAvg">Apply</button>
           <button class="btn btn-ghost btn-xs" id="btnResetAvg">Auto</button>
         </div>
+        <div class="custom-avg-note">⚠️ Display only – does not affect who owes what</div>
       </div>
       <div class="metric-card">
         <span class="metric-label">Trip Members</span>
@@ -417,6 +418,14 @@
               <span class="dinfo-label">Current Borrow Amount</span>
               <strong class="dinfo-amt" id="decBorrowCurrentAmt">₹0</strong>
             </div>
+          </div>
+
+          <div class="form-group" id="decBorrowPersonRow" style="display:none;">
+            <label class="form-label required" for="decBorrowPayerSel">Who is paying back?</label>
+            <select id="decBorrowPayerSel" class="form-input">
+              <option value="">-- Select person --</option>
+            </select>
+            <div style="font-size:.75rem;color:var(--muted);margin-top:4px;" id="decBorrowPerHeadHint"></div>
           </div>
 
           <div class="form-group">

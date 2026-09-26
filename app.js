@@ -141,6 +141,12 @@
   const btnClearAll       = $('btnClearAll');
   const btnClearTop       = $('btnClearTop');
 
+  // Global Undo/Redo (password protected)
+  const btnGlobalUndo     = $('btnGlobalUndo');
+  const btnGlobalRedo     = $('btnGlobalRedo');
+  const undoBadge         = $('undoBadge');
+  const redoBadge         = $('redoBadge');
+
   // Custom popup modal (replaces native alert/confirm/prompt)
   const modalPopup        = $('modalPopup');
   const popupIcon         = $('popupIcon');
@@ -164,11 +170,16 @@
   const scopeCardExisting   = $('scopeCardExisting');
   const scopeCardAllNew     = $('scopeCardAllNew');
 
-  // Admin password used to protect Add Person / Delete Person / Clear All
+  // Admin password used to protect Add Person / Delete Person / Clear All / Undo / Redo
   const ADMIN_PASSWORD = 'mingutha';
 
   // Per-person redo stack for undo/redo (persisted to localStorage)
   let redoStacks = {};
+
+  // ── Global (whole-app) Undo/Redo history — snapshots of {people, expenses, customAvg, defaultAllSpends}
+  let globalUndoStack = [];
+  let globalRedoStack = [];
+  const GLOBAL_HISTORY_LIMIT = 50;
 
   // ─── UTILS ───────────────────────────────────────────────────────────────────
   const fmtINR = v => {
@@ -215,6 +226,80 @@
   // Alphabetical helpers — used everywhere a list of names is rendered
   const sortNames    = arr => [...(arr || [])].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
   const sortedPeople = () => sortNames(people);
+
+  // ─── GLOBAL UNDO/REDO (password protected, whole-app history) ────────────────
+  /** Deep snapshot of everything that can change */
+  function snapshotState() {
+    return JSON.stringify({ people, expenses, customAvg, defaultAllSpends });
+  }
+
+  /** Call this BEFORE any mutation to record the "before" state on the undo stack */
+  function pushUndoSnapshot() {
+    globalUndoStack.push(snapshotState());
+    if (globalUndoStack.length > GLOBAL_HISTORY_LIMIT) globalUndoStack.shift();
+    globalRedoStack = []; // any new action invalidates the redo trail
+    updateUndoRedoBadges();
+  }
+
+  function applySnapshot(json) {
+    try {
+      const d = JSON.parse(json);
+      people           = Array.isArray(d.people) ? d.people : [];
+      expenses         = Array.isArray(d.expenses) ? d.expenses : [];
+      customAvg        = (d.customAvg !== undefined) ? d.customAvg : null;
+      defaultAllSpends = Array.isArray(d.defaultAllSpends) ? d.defaultAllSpends : [];
+    } catch {
+      return;
+    }
+    save();
+    renderAll();
+    updateUndoRedoBadges();
+  }
+
+  function updateUndoRedoBadges() {
+    if (undoBadge) {
+      undoBadge.style.display = globalUndoStack.length ? 'inline-block' : 'none';
+      undoBadge.textContent = globalUndoStack.length;
+    }
+    if (redoBadge) {
+      redoBadge.style.display = globalRedoStack.length ? 'inline-block' : 'none';
+      redoBadge.textContent = globalRedoStack.length;
+    }
+    if (btnGlobalUndo) btnGlobalUndo.disabled = globalUndoStack.length === 0;
+    if (btnGlobalRedo) btnGlobalRedo.disabled = globalRedoStack.length === 0;
+  }
+
+  if (btnGlobalUndo) {
+    btnGlobalUndo.addEventListener('click', async () => {
+      if (!globalUndoStack.length) {
+        await uiAlert('Nothing to Undo', 'No actions are available to undo yet.', { icon: 'ℹ️' });
+        return;
+      }
+      const authorized = await verifyAdminPassword('Undo Last Action', 'Enter the admin password to undo the most recent change.');
+      if (!authorized) return;
+
+      const current = snapshotState();
+      const prev = globalUndoStack.pop();
+      globalRedoStack.push(current);
+      applySnapshot(prev);
+    });
+  }
+
+  if (btnGlobalRedo) {
+    btnGlobalRedo.addEventListener('click', async () => {
+      if (!globalRedoStack.length) {
+        await uiAlert('Nothing to Redo', 'No undone actions are available to redo.', { icon: 'ℹ️' });
+        return;
+      }
+      const authorized = await verifyAdminPassword('Redo Action', 'Enter the admin password to redo the last undone change.');
+      if (!authorized) return;
+
+      const current = snapshotState();
+      const next = globalRedoStack.pop();
+      globalUndoStack.push(current);
+      applySnapshot(next);
+    });
+  }
 
   // ─── SERVER SYNC ─────────────────────────────────────────────────────────────
   let _lastServerSnapshot = '';   // JSON string of last data from server
@@ -589,6 +674,7 @@
     renderPersonCards(data);
     renderBorrowRecords(data);
     renderSettlement(data);
+    updateUndoRedoBadges();
   }
 
   // ─── TOP METRICS ─────────────────────────────────────────────────────────────
@@ -668,6 +754,8 @@
       .map(c => c.value)
       .filter(name => name !== payer);
 
+    // Rendered in alphabetical order (eligiblePeople is already alphabetical via sortedPeople()).
+    // On mobile, CSS lays these out 2–3 per row (see index.html media query) while preserving this order.
     individualChks.innerHTML = eligiblePeople.map(p => `
       <label class="chk-item">
         <input type="checkbox" name="spentFor" value="${p}" ${previouslyChecked.includes(p) ? 'checked' : ''} />
@@ -835,6 +923,7 @@
         const description = (descInp.value || '').trim() || 'Self Spend';
 
         // Save: spentBy = person, spentFor = [person] (personal self expense)
+        pushUndoSnapshot();
         expenses.push({
           id: genId(),
           spentBy: person,
@@ -877,6 +966,7 @@
           return;
         }
 
+        pushUndoSnapshot();
         const removedExp = expenses.splice(targetIdx, 1)[0];
         if (!redoStacks[person]) redoStacks[person] = [];
         redoStacks[person].push(removedExp);
@@ -896,6 +986,7 @@
           return;
         }
 
+        pushUndoSnapshot();
         const restoredExp = redoStacks[person].pop();
         expenses.push(restoredExp);
         save();
@@ -1129,6 +1220,7 @@
         return;
       }
 
+      pushUndoSnapshot();
       if (reduceBy >= exp.amount) {
         expenses = expenses.filter(x => x.id !== expId);
       } else {
@@ -1145,7 +1237,13 @@
   // ─── PREVIOUS BORROW RECORDS BLOCK ───────────────────────────────────────────
   function renderBorrowRecords(data) {
     if (!borrowRecordsList) return;
-    const transactions = (data && data.transactions) ? data.transactions : [];
+    // BUG FIX: previously this checked against the *simplified* net-settlement
+    // `transactions` list, which routes payments through third parties and can
+    // wrongly mark a borrow "settled" (or unsettled) even when the specific
+    // person→payer debt hasn't changed. We now use `pairwiseTransactions`
+    // (the direct 1-to-1 net balance between exactly this person and this
+    // payer) which correctly reflects whether that specific debt still exists.
+    const pairwiseTransactions = (data && data.pairwiseTransactions) ? data.pairwiseTransactions : [];
     const borrowExps = expenses.filter(e => e.isBorrow || (Array.isArray(e.spentFor) && e.spentFor.some(p => p !== e.spentBy)));
 
     if (borrowCountBadge) {
@@ -1160,10 +1258,11 @@
     const sorted = [...borrowExps].sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
 
     borrowRecordsList.innerHTML = sorted.map(e => {
-      // Bug 4: Check if this borrow is settled in net settlement.
-      // A borrow is settled if no beneficiary still needs to pay this payer in settlement transactions.
+      // A borrow is settled only if the direct, pairwise net balance between
+      // that specific beneficiary and this specific payer is zero (i.e. no
+      // pairwise transaction still has that beneficiary owing this payer).
       const isSettled = (e.spentFor || []).every(person =>
-        !transactions.some(t => t.from === person && t.to === e.spentBy)
+        !pairwiseTransactions.some(t => t.from === person && t.to === e.spentBy)
       );
 
       const totalBorrowAmt = e.isBorrow ? (e.amount * (e.spentFor && e.spentFor.length ? e.spentFor.length : 1)) : e.amount;
@@ -1289,6 +1388,7 @@
         return;
       }
 
+      pushUndoSnapshot();
       if (isMulti && selectedPerson) {
         const newSpentFor = exp.spentFor.filter(p => p !== selectedPerson);
         if (newSpentFor.length === 0) {
@@ -1299,7 +1399,7 @@
       } else {
         if (reduceBy >= exp.amount) {
           const ok = await uiConfirm('Remove Borrow?', `Reducing by ₹${reduceBy} will remove this borrow completely.\n\nCurrent amount: ₹${exp.amount}\n\nProceed?`, { icon: '🗑️', confirmLabel: 'Yes, Remove' });
-          if (!ok) return;
+          if (!ok) { globalUndoStack.pop(); updateUndoRedoBadges(); return; }
           expenses = expenses.filter(x => x.id !== expId);
         } else {
           exp.amount = Math.round((exp.amount - reduceBy) * 100) / 100;
@@ -1350,6 +1450,7 @@
 
     if (err) return;
 
+    pushUndoSnapshot();
     expenses.push({
       id: genId(),
       spentBy,
@@ -1474,6 +1575,7 @@
     const authorized = await verifyAdminPassword('Add Person', `Enter the admin password to add "${name}" to the trip.`);
     if (!authorized) return;
 
+    pushUndoSnapshot();
     people.push(name);
 
     // If any spendings were marked for "All (including new registers)", auto-add them for this new person
@@ -1513,6 +1615,7 @@
       { icon: '🗑️', confirmLabel: 'Yes, Remove', type: 'danger' }
     );
     if (!ok) return;
+    pushUndoSnapshot();
     people = people.filter(p => p !== name);
     expenses = expenses.filter(ex =>
       ex.spentBy !== name &&
@@ -1539,6 +1642,7 @@
     btnSaveAvg.addEventListener('click', () => {
       const v = parseFloat(customAvgInp.value);
       if (!isNaN(v) && v >= 0) {
+        pushUndoSnapshot();
         customAvg = v;
         save();
         renderAll();
@@ -1549,6 +1653,7 @@
 
   if (btnResetAvg) {
     btnResetAvg.addEventListener('click', () => {
+      pushUndoSnapshot();
       customAvg = null;
       if (customAvgInp) customAvgInp.value = '';
       save();
@@ -1613,6 +1718,7 @@
       return;
     }
 
+    pushUndoSnapshot();
     exp.spentBy      = checkedSpender ? checkedSpender.value : exp.spentBy;
     exp.amount       = amount;
     exp.spentFor     = spentFor;
@@ -1646,6 +1752,7 @@
     );
     if (pwd === null) return; // cancelled
     if (pwd === ADMIN_PASSWORD) {
+      pushUndoSnapshot();
       people = []; expenses = []; customAvg = null; redoStacks = {}; defaultAllSpends = [];
       localStorage.clear();
       save();
@@ -1761,6 +1868,7 @@
         return;
       }
 
+      pushUndoSnapshot();
       // Add personal spend for each existing trip member
       people.forEach(p => {
         expenses.push({
@@ -1813,6 +1921,7 @@
     inpDate.value = today();
     renderAll();
     renderIndividualCheckboxes();
+    updateUndoRedoBadges();
 
     // 2) Try to load from server — server always wins (shared source of truth)
     await loadFromServer(false);

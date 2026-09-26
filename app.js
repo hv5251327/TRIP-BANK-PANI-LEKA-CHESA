@@ -410,7 +410,7 @@
       return s + (e.isBorrow ? amount * (cnt) : amount);
     }, 0);
     const n = people.length;
-    const autoAvg = n > 1 ? (totalSpend / (n - 1)) : 0;
+    const autoAvg = n > 1 ? (totalSpend / (n)) : 0;
 
     // Init per-person buckets
     const stats = {};

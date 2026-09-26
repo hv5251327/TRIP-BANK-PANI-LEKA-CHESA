@@ -201,6 +201,68 @@
     return new Date(y, m-1, d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   };
 
+  // ─── SERVER SYNC ─────────────────────────────────────────────────────────────
+  let _lastServerSnapshot = '';   // JSON string of last data from server
+  let _syncing = false;
+
+  /** Push current state to the server (fire-and-forget) */
+  function syncToServer() {
+    if (_syncing) return;
+    const payload = JSON.stringify({
+      people, expenses, customAvg, defaultAllSpends
+    });
+    _lastServerSnapshot = payload;
+    fetch('/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload
+    }).catch(() => {});   // ignore failures (offline etc.)
+  }
+
+  /** Pull latest state from server; merge only if server is newer */
+  async function loadFromServer(silent) {
+    try {
+      const res = await fetch('/api/data');
+      if (!res.ok) return false;
+      const data = await res.json();
+
+      // Check if server has initialized trip data (has .people array)
+      const serverHasData = data && Array.isArray(data.people);
+
+      if (!serverHasData) {
+        // Server is uninitialized: if this client has local data, push it up to server so others see it!
+        if (people.length > 0 || expenses.length > 0) {
+          syncToServer();
+        }
+        return false;
+      }
+
+      const snap = JSON.stringify(data);
+      if (snap === _lastServerSnapshot) return false;   // no change
+      _lastServerSnapshot = snap;
+
+      // Apply server data to state
+      people           = Array.isArray(data.people)           ? data.people           : people;
+      expenses         = Array.isArray(data.expenses)         ? data.expenses         : expenses;
+      customAvg        = (data.customAvg !== undefined)        ? data.customAvg        : customAvg;
+      defaultAllSpends = Array.isArray(data.defaultAllSpends) ? data.defaultAllSpends : defaultAllSpends;
+
+      // Keep localStorage in sync too
+      localStorage.setItem(SK_PEOPLE,          JSON.stringify(people));
+      localStorage.setItem(SK_EXPENSES,        JSON.stringify(expenses));
+      localStorage.setItem(SK_REDO,            JSON.stringify(redoStacks));
+      localStorage.setItem(SK_AUTO_ALL_SPENDS, JSON.stringify(defaultAllSpends));
+      if (customAvg !== null && !isNaN(customAvg) && customAvg > 0)
+        localStorage.setItem(SK_AVGOVER, customAvg);
+      else localStorage.removeItem(SK_AVGOVER);
+
+      if (!silent) renderAll();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // ─── PERSISTENCE ─────────────────────────────────────────────────────────────
   function load() {
     try {
@@ -227,6 +289,7 @@
     localStorage.setItem(SK_AUTO_ALL_SPENDS, JSON.stringify(defaultAllSpends));
     if (customAvg !== null && !isNaN(customAvg) && customAvg > 0) localStorage.setItem(SK_AVGOVER, customAvg);
     else localStorage.removeItem(SK_AVGOVER);
+    syncToServer();   // ← push to server so all devices see the update
   }
 
   // ─── CUSTOM POPUP HELPERS (replace native alert/confirm/prompt) ──────────────
@@ -1564,14 +1627,20 @@
   });
 
   // ─── INIT ─────────────────────────────────────────────────────────────────────
-  function init() {
+  async function init() {
+    // 1) Load from localStorage first (instant, works offline)
     load();
     inpDate.value = today();
     renderAll();
-    // Don't reset form on init - just ensure it's in clean state
     renderIndividualCheckboxes();
 
-    // Register Service Worker for offline capability
+    // 2) Try to load from server — server always wins (shared source of truth)
+    await loadFromServer(false);
+
+    // 3) Poll every 8 seconds to catch updates from other devices
+    setInterval(() => loadFromServer(false), 8000);
+
+    // 4) Register Service Worker for offline capability
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(() => {});
     }

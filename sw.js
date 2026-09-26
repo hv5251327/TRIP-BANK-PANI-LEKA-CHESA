@@ -29,6 +29,8 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+  // Never intercept API requests – always go directly to live server
+  if (event.request.url.includes('/api/')) return;
 
   // Always fetch fresh navigation/index.html when online
   if (event.request.mode === 'navigate') {

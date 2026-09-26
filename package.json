@@ -1,0 +1,19 @@
+{
+  "name": "trip-expense-sharing-app",
+  "version": "1.0.0",
+  "description": "A clean, modern, responsive Trip Expense Sharing & Settlement Web App",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "expense-sharing",
+    "splitwise",
+    "trip-splitter",
+    "settlement",
+    "javascript"
+  ],
+  "author": "",
+  "license": "MIT"
+}

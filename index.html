@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=4" />
 </head>
 <body>
   <div class="app-wrapper">
@@ -469,10 +469,25 @@
       </div>
       <form id="formBulkSpend">
         <div class="modal-bd">
-          <div class="decrease-info-card">
-            <div>
-              <span class="dinfo-label">Applies to all trip members</span>
-              <div class="member-pills" id="bulkMemberTags" style="margin-top:4px;"></div>
+          <!-- TARGET OPTIONS PROMINENT AT TOP -->
+          <div class="form-group" style="margin-bottom:6px;">
+            <label class="form-label required">Who gets this personal spending?</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;">
+              <label class="scope-card selected" id="scopeCardExisting" style="display:flex;flex-direction:column;gap:5px;padding:12px;border:2px solid var(--blue);background:var(--blue-s);border-radius:var(--r-md);cursor:pointer;transition:var(--tr);">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                  <span style="font-size:.875rem;font-weight:800;color:var(--text);">Existing Users</span>
+                  <input type="radio" name="bulkTargetScope" value="existing" checked style="accent-color:var(--blue);width:18px;height:18px;" />
+                </div>
+                <span style="font-size:.73rem;color:var(--muted);line-height:1.35;">Add only to current trip members</span>
+              </label>
+
+              <label class="scope-card" id="scopeCardAllNew" style="display:flex;flex-direction:column;gap:5px;padding:12px;border:2px solid var(--border);background:#fff;border-radius:var(--r-md);cursor:pointer;transition:var(--tr);">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                  <span style="font-size:.875rem;font-weight:800;color:var(--text);">All (Current + New)</span>
+                  <input type="radio" name="bulkTargetScope" value="all_and_new" style="accent-color:var(--blue);width:18px;height:18px;" />
+                </div>
+                <span style="font-size:.73rem;color:var(--muted);line-height:1.35;">Auto-adds to new registers too</span>
+              </label>
             </div>
           </div>
 
@@ -496,17 +511,10 @@
             <input type="date" id="bulkSpendDate" class="form-input" />
           </div>
 
-          <div class="form-group" style="margin-top:8px;">
-            <label class="form-label">Apply spending to:</label>
-            <div style="display:flex;flex-direction:column;gap:8px;">
-              <label class="chk-item" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;">
-                <input type="radio" name="bulkTargetScope" value="existing" checked style="accent-color:var(--blue);width:16px;height:16px;" />
-                <span class="chk-label" style="font-size:.84rem;"><strong>Existing members only</strong></span>
-              </label>
-              <label class="chk-item" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;">
-                <input type="radio" name="bulkTargetScope" value="all_and_new" style="accent-color:var(--blue);width:16px;height:16px;" />
-                <span class="chk-label" style="font-size:.84rem;"><strong>All members</strong> (existing + auto-add to new registers)</span>
-              </label>
+          <div class="decrease-info-card" style="margin-top:4px;">
+            <div>
+              <span class="dinfo-label">Current trip members</span>
+              <div class="member-pills" id="bulkMemberTags" style="margin-top:4px;"></div>
             </div>
           </div>
         </div>
@@ -539,6 +547,6 @@
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

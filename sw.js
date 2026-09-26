@@ -1,18 +1,19 @@
-const CACHE_NAME = 'trip-bank-v3';
+const CACHE_NAME = 'trip-bank-v4';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
-  './style.css',
-  './app.js',
+  './style.css?v=4',
+  './app.js?v=4',
   './logo.png',
   './manifest.json'
 ];
 
 self.addEventListener('install', event => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       return cache.addAll(ASSETS_TO_CACHE);
-    }).then(() => self.skipWaiting())
+    })
   );
 });
 
@@ -29,10 +30,27 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
+  // Always fetch fresh navigation/index.html when online
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-cache' })
+        .then(networkResponse => {
+          if (networkResponse && networkResponse.status === 200) {
+            const respClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, respClone));
+          }
+          return networkResponse;
+        })
+        .catch(async () => {
+          return (await caches.match('./index.html')) || (await caches.match('./'));
+        })
+    );
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then(networkResponse => {
-        // Cache the fresh response if it's valid
         if (networkResponse && networkResponse.status === 200) {
           const respClone = networkResponse.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, respClone));
@@ -40,13 +58,8 @@ self.addEventListener('fetch', event => {
         return networkResponse;
       })
       .catch(async () => {
-        // Fallback to cache when offline
         const cached = await caches.match(event.request);
         if (cached) return cached;
-        // Fallback for navigation requests
-        if (event.request.mode === 'navigate') {
-          return caches.match('./index.html') || caches.match('./');
-        }
       })
   );
 });

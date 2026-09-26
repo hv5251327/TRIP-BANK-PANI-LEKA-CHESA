@@ -145,14 +145,16 @@
   const popupBtnConfirm   = $('popupBtnConfirm');
 
   // Bulk personal spend modal
-  const btnBulkSpend      = $('btnBulkSpend');
-  const modalBulkSpend    = $('modalBulkSpend');
-  const formBulkSpend     = $('formBulkSpend');
-  const bulkAmount        = $('bulkAmount');
-  const bulkCalcHint      = $('bulkCalcHint');
-  const bulkDesc          = $('bulkDesc');
-  const bulkSpendDate     = $('bulkSpendDate');
-  const bulkMemberTags    = $('bulkMemberTags');
+  const btnBulkSpend        = $('btnBulkSpend');
+  const modalBulkSpend      = $('modalBulkSpend');
+  const formBulkSpend       = $('formBulkSpend');
+  const bulkAmount          = $('bulkAmount');
+  const bulkCalcHint        = $('bulkCalcHint');
+  const bulkDesc            = $('bulkDesc');
+  const bulkSpendDate       = $('bulkSpendDate');
+  const bulkMemberTags      = $('bulkMemberTags');
+  const scopeCardExisting   = $('scopeCardExisting');
+  const scopeCardAllNew     = $('scopeCardAllNew');
 
   // Per-person redo stack for undo/redo (persisted to localStorage)
   let redoStacks = {};
@@ -1392,6 +1394,34 @@
   btnClearTop.addEventListener('click', () => _doClearAll());
 
   // ─── BULK PERSONAL SPEND (⚡ Add for All) ────────────────────────────────────
+  function updateScopeCards(selectedVal) {
+    if (scopeCardExisting) {
+      const isSel = selectedVal === 'existing';
+      scopeCardExisting.style.borderColor = isSel ? 'var(--blue)' : 'var(--border)';
+      scopeCardExisting.style.background  = isSel ? 'var(--blue-s)' : '#fff';
+      const r = scopeCardExisting.querySelector('input');
+      if (r) r.checked = isSel;
+    }
+    if (scopeCardAllNew) {
+      const isSel = selectedVal === 'all_and_new';
+      scopeCardAllNew.style.borderColor = isSel ? 'var(--blue)' : 'var(--border)';
+      scopeCardAllNew.style.background  = isSel ? 'var(--blue-s)' : '#fff';
+      const r = scopeCardAllNew.querySelector('input');
+      if (r) r.checked = isSel;
+    }
+  }
+
+  if (scopeCardExisting) {
+    scopeCardExisting.addEventListener('click', e => {
+      updateScopeCards('existing');
+    });
+  }
+  if (scopeCardAllNew) {
+    scopeCardAllNew.addEventListener('click', e => {
+      updateScopeCards('all_and_new');
+    });
+  }
+
   if (btnBulkSpend) {
     btnBulkSpend.addEventListener('click', () => {
       if (bulkMemberTags) {
@@ -1406,13 +1436,7 @@
         bulkCalcHint.textContent = '';
         bulkCalcHint.style.display = 'none';
       }
-      const existingRadio = formBulkSpend ? formBulkSpend.querySelector('input[name="bulkTargetScope"][value="existing"]') : null;
-      const allRadio      = formBulkSpend ? formBulkSpend.querySelector('input[name="bulkTargetScope"][value="all_and_new"]') : null;
-      if (people.length === 0) {
-        if (allRadio) allRadio.checked = true;
-      } else {
-        if (existingRadio) existingRadio.checked = true;
-      }
+      updateScopeCards(people.length === 0 ? 'all_and_new' : 'existing');
       openModal(modalBulkSpend);
       if (bulkAmount) setTimeout(() => bulkAmount.focus(), 80);
     });

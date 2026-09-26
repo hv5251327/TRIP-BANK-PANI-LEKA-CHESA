@@ -182,9 +182,12 @@
               <div class="panel-tag panel-tag--green">Live Split</div>
               <h2 class="panel-title">Spend Amount</h2>
             </div>
-            <span class="live-badge"><span class="pulse"></span> Auto-updated</span>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <button type="button" class="btn btn-ghost btn-xs" id="btnBulkSpend" title="Add personal spending for all members at once">⚡ Add for All</button>
+              <span class="live-badge"><span class="pulse"></span> Auto-updated</span>
+            </div>
           </div>
-          <p class="panel-desc">What was spent for each person across all expenses. Click a card to see full breakdown.</p>
+          <p class="panel-desc">What was spent for each person. Use <strong>⚡ Add for All</strong> to log everyone's personal spending in one go.</p>
 
           <div class="person-cards" id="personCards">
             <div class="empty-state">
@@ -452,6 +455,53 @@
           <button type="submit" class="btn btn-primary btn-decrease-confirm">Confirm & Reduce</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL: BULK PERSONAL SPEND (Add for All) -->
+  <div class="modal-bg" id="modalBulkSpend" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal modal-lg">
+      <div class="modal-hd">
+        <h3>⚡ Add Personal Spending for All</h3>
+        <button class="modal-x" data-close="modalBulkSpend">✕</button>
+      </div>
+      <form id="formBulkSpend">
+        <div class="modal-bd">
+          <p style="font-size:.82rem;color:var(--muted);margin:0 0 4px;">Enter each person's personal spending. Leave blank to skip.</p>
+          <div id="bulkSpendRows" style="display:flex;flex-direction:column;gap:10px;margin-top:8px;">
+            <!-- Populated via JavaScript -->
+          </div>
+          <div style="margin-top:8px;">
+            <label class="form-label" for="bulkSpendDate">Date</label>
+            <input type="date" id="bulkSpendDate" class="form-input" />
+          </div>
+        </div>
+        <div class="modal-ft">
+          <button type="button" class="btn btn-secondary" data-close="modalBulkSpend">Cancel</button>
+          <button type="submit" class="btn btn-primary">✓ Save All Spendings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: CUSTOM POPUP (replaces native alert / confirm / prompt) -->
+  <div class="modal-bg" id="modalPopup" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal modal-popup">
+      <div class="popup-hd">
+        <div class="popup-icon" id="popupIcon">ℹ️</div>
+        <h3 class="popup-title" id="popupTitle">Notice</h3>
+      </div>
+      <div class="popup-bd">
+        <p class="popup-msg" id="popupMsg"></p>
+        <div id="popupInputWrap" style="display:none;margin-top:12px;">
+          <input type="text" id="popupInput" class="form-input" autocomplete="off" />
+        </div>
+      </div>
+      <div class="popup-ft" id="popupFt">
+        <button type="button" class="btn btn-secondary" id="popupBtnCancel" style="display:none;">Cancel</button>
+        <button type="button" class="btn btn-primary"   id="popupBtnOk">OK</button>
+        <button type="button" class="btn btn-primary"   id="popupBtnConfirm" style="display:none;">Confirm</button>
+      </div>
     </div>
   </div>
 

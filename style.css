@@ -762,19 +762,177 @@ borrowForm { display: flex; flex-direction: column; gap: 18px; }
   font-size: .8125rem; color: var(--muted); flex-wrap: wrap; gap: 12px;
 }
 
-/* ---- RESPONSIVE ---- */
-@media (max-width: 900px) {
-  .dashboard { grid-template-columns: 1fr; }
-  .top-metrics { grid-template-columns: 1fr; }
-  .detail-stats { grid-template-columns: repeat(2, 1fr); }
+/* ---- BULK PERSONAL SPEND MODAL ---- */
+.bulk-row {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: var(--r-md); background: var(--subtle);
 }
-@media (max-width: 560px) {
-  .app-wrapper { padding: 16px 12px 40px; }
-  .spender-grid { grid-template-columns: repeat(2, 1fr); }
-  .individual-chks { grid-template-columns: 1fr; }
+.bulk-row-name {
+  display: flex; align-items: center; gap: 8px;
+}
+.bulk-row-label {
+  font-size: .875rem; font-weight: 700; color: var(--text);
+}
+.bulk-row-inputs {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+@media (max-width: 480px) {
+  .bulk-row-inputs { flex-direction: column; align-items: stretch; }
+  .bulk-row-inputs .currency-wrap { width: 100% !important; }
 }
 
-/* ---- BUG FIXES ---- */
+/* ---- RESPONSIVE & MOBILE OPTIMIZATION ---- */
+
+/* Tablet: ≤900px */
+@media (max-width: 900px) {
+  .dashboard          { grid-template-columns: 1fr; }
+  .top-metrics        { grid-template-columns: repeat(2, 1fr); }
+  .detail-stats       { grid-template-columns: repeat(2, 1fr); }
+  .settle-item        { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .settle-amount      { align-self: flex-end; }
+}
+
+/* Small mobile: ≤560px */
+@media (max-width: 560px) {
+  /* Layout */
+  .app-wrapper        { padding: 12px 12px 36px; }
+  .top-metrics        { grid-template-columns: 1fr; gap: 10px; }
+  .metric-card        { padding: 14px 16px; }
+  .metric-value       { font-size: 1.45rem; }
+  .panel              { padding: 16px; }
+
+  /* Header */
+  .app-header         { padding-bottom: 14px; gap: 8px; }
+  .header-brand h1    { font-size: 1.15rem; }
+  .brand-logo-img     { width: 36px; height: 36px; }
+  .tagline            { font-size: .72rem; }
+  .btn-danger-top     { font-size: .72rem; padding: 7px 10px; }
+  .btn-primary        { font-size: .8rem; padding: 8px 12px; }
+
+  /* Forms - ≥16px prevents iOS auto-zoom */
+  .form-input         { font-size: 16px; }
+  .form-input-lg      { font-size: 16px; }
+  .currency-wrap .form-input { font-size: 16px; }
+
+  /* Spender grid */
+  .spender-grid       { grid-template-columns: repeat(2, 1fr); }
+  .individual-chks    { grid-template-columns: 1fr; }
+
+  /* Person cards */
+  .pcard-header       { padding: 10px 12px; flex-wrap: wrap; gap: 6px; }
+  .pcard-name         { font-size: .9rem; }
+  .pcard-balance-chip { font-size: .72rem; padding: 3px 8px; }
+
+  /* Self-spend row: stack vertically on very narrow screens */
+  .pcard-self-spend-row { flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 12px; }
+  .quick-spend-form   { width: 100%; }
+  .qs-amt-wrap        { width: 100%; flex: none; }
+  .qs-amt-input       { width: 100%; }
+  .qs-desc-input      { width: 100%; min-width: 0; }
+
+  /* Borrow cards */
+  .borrow-card-actions { flex-direction: column; align-items: flex-start; gap: 8px; }
+
+  /* Settlement */
+  .settle-flow        { flex-wrap: wrap; gap: 6px; }
+
+  /* Modals – bottom-sheet on mobile */
+  .modal-bg           { align-items: flex-end; padding: 0; }
+  .modal {
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    max-width: 100%;
+    max-height: 92vh;
+    animation: mslide .22s ease-out;
+  }
+  .modal-lg           { max-width: 100%; }
+  .modal-popup        { border-radius: var(--r-lg) var(--r-lg) 0 0 !important; }
+  @keyframes mslide {
+    from { transform: translateY(100%); opacity: .5; }
+    to   { transform: translateY(0);    opacity: 1;  }
+  }
+
+  /* Touch targets: 44px minimum for all interactive elements */
+  .btn                { min-height: 44px; }
+  .btn-xs             { min-height: 36px; }
+  .qs-btn             { min-height: 40px; padding: 8px 14px; }
+  .btn-undo-person,
+  .btn-redo-person    { min-height: 38px; }
+  .chk-item           { min-height: 44px; }
+  .spender-card       { min-height: 48px; }
+  .modal-x            { width: 36px; height: 36px; font-size: 1.1rem; }
+
+  /* Footer */
+  .app-footer         { flex-direction: column; align-items: flex-start; gap: 8px; }
+}
+
+/* Extra small: ≤380px */
+@media (max-width: 380px) {
+  .app-wrapper        { padding: 10px 10px 30px; }
+  .spender-grid       { grid-template-columns: 1fr; }
+  .pcard-header       { padding: 8px 10px; }
+  .pcard-self-spend-row { padding: 8px 10px; }
+  .panel              { padding: 12px; }
+}
+
+/* ---- CUSTOM POPUP MODAL ---- */
+.modal-popup {
+  max-width: 360px;
+  border-radius: var(--r-lg);
+  text-align: center;
+}
+
+.popup-hd {
+  padding: 28px 24px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.popup-icon {
+  font-size: 2.4rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: var(--subtle);
+  border: 1px solid var(--border);
+}
+
+.popup-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.popup-bd {
+  padding: 0 24px 16px;
+}
+
+.popup-msg {
+  font-size: .9rem;
+  color: var(--muted);
+  line-height: 1.65;
+  white-space: pre-line;
+  margin: 0;
+}
+
+.popup-ft {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--subtle);
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+}
+.popup-ft .btn { min-width: 90px; }
+
+/* ---- BUG FIXES (carried forward) ---- */
 
 /* Bug 4: Settled borrow card style */
 .borrow-card--settled {

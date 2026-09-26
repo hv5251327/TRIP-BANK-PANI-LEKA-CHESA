@@ -130,6 +130,24 @@
   const btnClearAll       = $('btnClearAll');
   const btnClearTop       = $('btnClearTop');
 
+  // Custom popup modal (replaces native alert/confirm/prompt)
+  const modalPopup        = $('modalPopup');
+  const popupIcon         = $('popupIcon');
+  const popupTitle        = $('popupTitle');
+  const popupMsg          = $('popupMsg');
+  const popupInputWrap    = $('popupInputWrap');
+  const popupInput        = $('popupInput');
+  const popupBtnOk        = $('popupBtnOk');
+  const popupBtnCancel    = $('popupBtnCancel');
+  const popupBtnConfirm   = $('popupBtnConfirm');
+
+  // Bulk personal spend modal
+  const btnBulkSpend      = $('btnBulkSpend');
+  const modalBulkSpend    = $('modalBulkSpend');
+  const formBulkSpend     = $('formBulkSpend');
+  const bulkSpendRows     = $('bulkSpendRows');
+  const bulkSpendDate     = $('bulkSpendDate');
+
   // Per-person redo stack for undo/redo (persisted to localStorage)
   let redoStacks = {};
 
@@ -171,6 +189,84 @@
     if (customAvg !== null) localStorage.setItem(SK_AVGOVER, customAvg);
     else localStorage.removeItem(SK_AVGOVER);
   }
+
+  // ─── CUSTOM POPUP HELPERS (replace native alert/confirm/prompt) ──────────────
+  let _popupResolve = null;
+  let _popupIsPrompt = false;
+
+  function _showPopup({ icon, title, msg, type }) {
+    popupIcon.textContent = icon || 'ℹ️';
+    // Icon background colour by type
+    popupIcon.style.background = type === 'danger' ? 'var(--red-s)' :
+                                 type === 'success' ? 'var(--green-s)' : 'var(--subtle)';
+    popupIcon.style.borderColor = type === 'danger' ? 'var(--red-b)' :
+                                  type === 'success' ? 'var(--green-b)' : 'var(--border)';
+    popupTitle.textContent = title || '';
+    popupMsg.textContent   = msg   || '';
+    modalPopup.classList.add('open');
+    modalPopup.setAttribute('aria-hidden', 'false');
+  }
+
+  function uiAlert(title, msg, opts = {}) {
+    return new Promise(resolve => {
+      _popupResolve  = resolve;
+      _popupIsPrompt = false;
+      _showPopup({ icon: opts.icon || 'ℹ️', title, msg, type: opts.type });
+      popupInputWrap.style.display  = 'none';
+      popupBtnOk.style.display      = '';
+      popupBtnCancel.style.display  = 'none';
+      popupBtnConfirm.style.display = 'none';
+      popupBtnOk.textContent        = opts.okLabel || 'OK';
+      setTimeout(() => popupBtnOk.focus(), 60);
+    });
+  }
+
+  function uiConfirm(title, msg, opts = {}) {
+    return new Promise(resolve => {
+      _popupResolve  = resolve;
+      _popupIsPrompt = false;
+      _showPopup({ icon: opts.icon || '⚠️', title, msg, type: opts.type || 'danger' });
+      popupInputWrap.style.display  = 'none';
+      popupBtnOk.style.display      = 'none';
+      popupBtnCancel.style.display  = '';
+      popupBtnConfirm.style.display = '';
+      popupBtnCancel.textContent    = opts.cancelLabel  || 'Cancel';
+      popupBtnConfirm.textContent   = opts.confirmLabel || 'Confirm';
+      popupBtnConfirm.className     = 'btn ' + (opts.type === 'danger' ? 'btn-decrease-confirm' : 'btn-primary');
+      setTimeout(() => popupBtnCancel.focus(), 60);
+    });
+  }
+
+  function uiPrompt(title, msg, opts = {}) {
+    return new Promise(resolve => {
+      _popupResolve  = resolve;
+      _popupIsPrompt = true;
+      _showPopup({ icon: opts.icon || '🔑', title, msg, type: opts.type });
+      popupInput.type        = opts.inputType    || 'text';
+      popupInput.placeholder = opts.placeholder  || '';
+      popupInput.value       = '';
+      popupInputWrap.style.display  = 'block';
+      popupBtnOk.style.display      = 'none';
+      popupBtnCancel.style.display  = '';
+      popupBtnConfirm.style.display = '';
+      popupBtnCancel.textContent    = 'Cancel';
+      popupBtnConfirm.textContent   = opts.submitLabel || 'Submit';
+      popupBtnConfirm.className     = 'btn btn-primary';
+      setTimeout(() => popupInput.focus(), 60);
+    });
+  }
+
+  function _closePopup(result) {
+    modalPopup.classList.remove('open');
+    modalPopup.setAttribute('aria-hidden', 'true');
+    if (_popupResolve) { _popupResolve(result); _popupResolve = null; }
+  }
+
+  popupBtnOk.addEventListener('click',      () => _closePopup(undefined));
+  popupBtnCancel.addEventListener('click',  () => _closePopup(_popupIsPrompt ? null : false));
+  popupBtnConfirm.addEventListener('click', () => _closePopup(_popupIsPrompt ? popupInput.value : true));
+  popupInput.addEventListener('keydown', e => { if (e.key === 'Enter') _closePopup(popupInput.value); });
+  modalPopup.addEventListener('click', e => { if (e.target === modalPopup) _closePopup(_popupIsPrompt ? null : false); });
 
   // ─── CALCULATIONS ────────────────────────────────────────────────────────────
   /**
@@ -537,7 +633,7 @@
 
     // ── Undo previous self-spending for this person (cannot remove spending by others)
     personCards.querySelectorAll('.btn-undo-person').forEach(btn => {
-      btn.addEventListener('click', e => {
+      btn.addEventListener('click', async e => {
         e.stopPropagation();
         const person = btn.dataset.person;
         let targetIdx = -1;
@@ -551,7 +647,7 @@
         }
 
         if (targetIdx === -1) {
-          alert(`No self-spendings found to undo for ${person}. (Undo cannot remove spendings by others)`);
+          await uiAlert('Nothing to Undo', `No personal self-spendings found to undo for ${person}.\n\nNote: Undo cannot remove expenses paid by others.`, { icon: 'ℹ️' });
           return;
         }
 
@@ -566,11 +662,11 @@
 
     // ── Redo previous undone spending for this person
     personCards.querySelectorAll('.btn-redo-person').forEach(btn => {
-      btn.addEventListener('click', e => {
+      btn.addEventListener('click', async e => {
         e.stopPropagation();
         const person = btn.dataset.person;
         if (!redoStacks[person] || redoStacks[person].length === 0) {
-          alert(`Nothing to redo for ${person}.`);
+          await uiAlert('Nothing to Redo', `No undone spendings to restore for ${person}.`, { icon: 'ℹ️' });
           return;
         }
 
@@ -760,7 +856,7 @@
   }
 
   if (formDecreaseExpense) {
-    formDecreaseExpense.addEventListener('submit', e => {
+    formDecreaseExpense.addEventListener('submit', async e => {
       e.preventDefault();
       const expId = decExpId.value;
       const personName = decPersonName.value;
@@ -769,7 +865,7 @@
 
       const reduceBy = parseFloat(decAmountInp.value);
       if (isNaN(reduceBy) || reduceBy <= 0) {
-        alert('Please enter a valid amount greater than 0.');
+        await uiAlert('Invalid Amount', 'Please enter a valid amount greater than 0.', { icon: '⚠️', type: 'danger' });
         return;
       }
 
@@ -897,14 +993,13 @@
   }
 
   if (formDecreaseBorrow) {
-    formDecreaseBorrow.addEventListener('submit', e => {
+    formDecreaseBorrow.addEventListener('submit', async e => {
       e.preventDefault();
       const expId = decBorrowExpId.value;
       const exp = expenses.find(x => x.id === expId);
       if (!exp) return;
 
       const typedKey = decBorrowKeyInp.value.trim();
-      // Only when this key is typed, the amount can be decreased!
       if (!exp.secretKey || typedKey !== exp.secretKey) {
         decBorrowKeyErr.classList.add('show');
         decBorrowKeyInp.focus();
@@ -914,40 +1009,34 @@
 
       const reduceBy = parseFloat(decBorrowAmtInp.value);
       if (isNaN(reduceBy) || reduceBy <= 0) {
-        alert('Please enter a valid amount greater than 0.');
+        await uiAlert('Invalid Amount', 'Please enter a valid amount greater than 0.', { icon: '⚠️', type: 'danger' });
         return;
       }
 
-      // Bug 1 fix: for multi-person borrows, use selected person to correctly attribute repayment
       const beneficiaries = exp.spentFor || [];
       const isMulti = beneficiaries.length > 1;
       const selectedPerson = isMulti && decBorrowPayerSel ? decBorrowPayerSel.value : null;
 
       if (isMulti && !selectedPerson) {
-        alert('Please select who is paying back their share.');
+        await uiAlert('Select Person', 'Please select who is paying back their share.', { icon: '⚠️' });
         if (decBorrowPayerSel) decBorrowPayerSel.focus();
         return;
       }
 
       if (isMulti && selectedPerson) {
-        // Remove the paying person from spentFor and reduce amount by exactly their per-head share
         const perHead = Math.round(exp.amount / beneficiaries.length * 100) / 100;
         const newSpentFor = exp.spentFor.filter(p => p !== selectedPerson);
         if (newSpentFor.length === 0 || reduceBy >= exp.amount) {
-          // No more beneficiaries – remove the borrow entirely
           expenses = expenses.filter(x => x.id !== expId);
         } else {
           exp.spentFor = newSpentFor;
           exp.amount = Math.round((exp.amount - perHead) * 100) / 100;
         }
       } else {
-        // Single-person borrow – existing behavior
         if (reduceBy >= exp.amount) {
-          if (confirm(`Reducing by ₹${reduceBy} will remove this borrow completely (Current: ₹${exp.amount}). Proceed?`)) {
-            expenses = expenses.filter(x => x.id !== expId);
-          } else {
-            return;
-          }
+          const ok = await uiConfirm('Remove Borrow?', `Reducing by ₹${reduceBy} will remove this borrow completely.\n\nCurrent amount: ₹${exp.amount}\n\nProceed?`, { icon: '🗑️', confirmLabel: 'Yes, Remove' });
+          if (!ok) return;
+          expenses = expenses.filter(x => x.id !== expId);
         } else {
           exp.amount = Math.round((exp.amount - reduceBy) * 100) / 100;
         }
@@ -1083,17 +1172,21 @@
   });
 
   // ─── DELETE PERSON (via × button in existingMembers list) ────────────────────
-  existingMembers.addEventListener('click', e => {
+  existingMembers.addEventListener('click', async e => {
     const btn = e.target.closest('.pill-del');
     if (!btn) return;
     const name = btn.dataset.name;
-    if (!confirm(`Remove "${name}" from the trip?\n\nAll expenses involving ${name} will also be deleted. This cannot be undone.`)) return;
+    const ok = await uiConfirm(
+      `Remove "${name}"?`,
+      `All expenses involving ${name} will also be permanently deleted.\n\nThis action cannot be undone.`,
+      { icon: '🗑️', confirmLabel: 'Yes, Remove', type: 'danger' }
+    );
+    if (!ok) return;
     people = people.filter(p => p !== name);
     expenses = expenses.filter(ex =>
       ex.spentBy !== name &&
       !(Array.isArray(ex.spentFor) && ex.spentFor.includes(name))
     );
-    // Also remove any redo stack entries for this person
     delete redoStacks[name];
     save();
     renderAll();
@@ -1169,7 +1262,7 @@
     openModal(modalEdit);
   };
 
-  formEdit.addEventListener('submit', e => {
+  formEdit.addEventListener('submit', async e => {
     e.preventDefault();
     const exp = expenses.find(e => e.id === editId.value);
     if (!exp) return;
@@ -1179,7 +1272,7 @@
     const amount = parseFloat(editAmt.value);
 
     if (!amount || amount <= 0 || !spentFor.length) {
-      alert('Please enter a valid amount and select at least one person.');
+      await uiAlert('Invalid Input', 'Please enter a valid amount and select at least one person.', { icon: '⚠️', type: 'danger' });
       return;
     }
 
@@ -1208,39 +1301,86 @@
     a.remove();
   });
 
-  btnClearAll.addEventListener('click', () => {
-    const pwd = prompt('Enter password to clear and reset all data in site:');
-    if (pwd === null) return; // User pressed Cancel
+  async function _doClearAll() {
+    const pwd = await uiPrompt(
+      'Clear All Data',
+      'Enter the admin password to permanently delete all trip data.',
+      { icon: '🗑️', inputType: 'password', placeholder: 'Password…', submitLabel: 'Clear Data' }
+    );
+    if (pwd === null) return; // cancelled
     if (pwd === 'mingutha') {
-      people = [];
-      expenses = [];
-      customAvg = null;
+      people = []; expenses = []; customAvg = null; redoStacks = {};
       localStorage.clear();
       save();
       renderAll();
       resetForm();
-      alert('All site data has been reset and cleared successfully!');
+      await uiAlert('Data Cleared', 'All site data has been reset and cleared successfully!', { icon: '✅', type: 'success' });
     } else {
-      alert('Incorrect password! Data was not cleared.');
+      await uiAlert('Wrong Password', 'Incorrect password! Data was not cleared.', { icon: '🔒', type: 'danger' });
     }
-  });
+  }
 
-  btnClearTop.addEventListener('click', () => {
-    const pwd = prompt('Enter password to clear and reset all data in site:');
-    if (pwd === null) return;
-    if (pwd === 'mingutha') {
-      people = [];
-      expenses = [];
-      customAvg = null;
-      localStorage.clear();
+  btnClearAll.addEventListener('click', () => _doClearAll());
+  btnClearTop.addEventListener('click', () => _doClearAll());
+
+  // ─── BULK PERSONAL SPEND (⚡ Add for All) ────────────────────────────────────
+  if (btnBulkSpend) {
+    btnBulkSpend.addEventListener('click', () => {
+      if (!people.length) {
+        uiAlert('No Members Yet', 'Add some trip members first before recording personal spending.', { icon: 'ℹ️' });
+        return;
+      }
+      // Populate one row per person
+      bulkSpendRows.innerHTML = people.map(p => `
+        <div class="bulk-row">
+          <div class="bulk-row-name">
+            <div class="avatar" style="width:26px;height:26px;font-size:.65rem;flex-shrink:0;background:var(--blue);color:#fff">${initials(p)}</div>
+            <span class="bulk-row-label">${p}</span>
+          </div>
+          <div class="bulk-row-inputs">
+            <div class="currency-wrap" style="width:110px;flex-shrink:0;">
+              <span class="currency-sym">₹</span>
+              <input type="number" class="form-input bulk-amt" data-person="${p}" placeholder="0" min="0" step="any" style="padding-left:28px;font-size:.875rem;" />
+            </div>
+            <input type="text" class="form-input bulk-desc" data-person="${p}" placeholder="What for? (optional)" style="font-size:.875rem;flex:1;min-width:0;" />
+          </div>
+        </div>
+      `).join('');
+      bulkSpendDate.value = today();
+      openModal(modalBulkSpend);
+      // Focus first amount input
+      const firstAmt = bulkSpendRows.querySelector('.bulk-amt');
+      if (firstAmt) setTimeout(() => firstAmt.focus(), 80);
+    });
+  }
+
+  if (formBulkSpend) {
+    formBulkSpend.addEventListener('submit', async e => {
+      e.preventDefault();
+      const date = bulkSpendDate.value || today();
+      let added = 0;
+      people.forEach(p => {
+        const amtInp  = bulkSpendRows.querySelector(`.bulk-amt[data-person="${p}"]`);
+        const descInp = bulkSpendRows.querySelector(`.bulk-desc[data-person="${p}"]`);
+        const amount  = parseFloat(amtInp ? amtInp.value : '');
+        if (!amount || amount <= 0) return; // skip blank rows
+        expenses.push({
+          id: genId(), spentBy: p, amount,
+          spentFor: [p],
+          description: (descInp ? descInp.value.trim() : '') || 'Personal spend',
+          date, isSelfSpend: true, createdAt: Date.now()
+        });
+        added++;
+      });
+      if (!added) {
+        await uiAlert('Nothing Added', 'Please enter an amount for at least one person.', { icon: 'ℹ️' });
+        return;
+      }
       save();
+      closeModal(modalBulkSpend);
       renderAll();
-      resetForm();
-      alert('All site data has been reset and cleared successfully!');
-    } else {
-      alert('Incorrect password! Data was not cleared.');
-    }
-  });
+    });
+  }
 
   // ─── MODAL HELPERS ────────────────────────────────────────────────────────────
   function openModal(modal)  { if (modal) { modal.classList.add('open'); modal.setAttribute('aria-hidden','false'); } }
